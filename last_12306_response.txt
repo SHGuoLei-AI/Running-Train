@@ -1,0 +1,66 @@
+ï»¿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>éè·¯å®¢æ·æå¡ä¸­å¿</title>
+<link href="/mormhweb/images/global.css" rel="stylesheet" type="text/css">
+<link href="/mormhweb/images/err.css" rel="stylesheet" type="text/css"/>
+<style type="text/css"> 
+<!--
+html,body{background:#fff;}
+
+
+-->
+</style>
+
+
+</head>
+
+<body>
+<div class="err_text">
+						 <ul id="error" >
+                         <li id="err_top">
+                         
+                         </li>
+                                                  <li id="err_bot">ããç½ç»å¯è½å­å¨é®é¢ï¼è¯·æ¨éè¯ä¸ä¸ï¼
+												  
+												  <div class="time">						 <SCRIPT language="javascript">
+<!--
+function initArray() {
+	for (i = 0; i < initArray.arguments.length; i++)
+		this[i] = initArray.arguments[i];
+}
+var isnMonths = new initArray("1æ", "2æ", "3æ", "4æ", "5æ", "6æ", "7æ", "8æ", "9æ", "10æ", "11æ", "12æ");
+var isnDays = new initArray("æææ¥", "ææä¸", "ææäº", "ææä¸", "ææå", "ææäº", "ææå­", "æææ¥");
+today = new Date();
+hrs = today.getHours();
+min = today.getMinutes();
+sec = today.getSeconds();
+clckh = "" + ((hrs > 12) ? hrs - 12 : hrs);
+clckm = ((min < 10) ? "0" : "") + min;
+clcks = ((sec < 10) ? "0" : "") + sec;
+clck = (hrs >= 12) ? "ä¸å" : "ä¸å";
+var stnr = "";
+var ns = "0123456789";
+var a = "";
+
+function getFullYear(d) {
+	yr = d.getYear();
+	if (yr < 1000)
+		yr += 1900;
+	return yr;
+}
+
+document.write(getFullYear(today) + "å¹´" + isnMonths[today.getMonth()] + today.getDate() + "æ¥" + " " + clckh + ":" + clckm + ":" + clcks + " " +  isnDays[today.getDay()]);
+
+//-->
+</SCRIPT></div>
+							
+                         
+                         </li>
+
+                         </ul>
+
+</div>
+</body>
+</html>
