@@ -1,49 +1,44 @@
-# Running Train PySide6 App
+# Running Train
 
-这是一个基于 PySide6 的动态模拟火车运行图应用。主窗口加载 Qt Designer 设计的界面，并在自定义画布中绘制轨道和火车运行点。
+基于 PySide6 的铁路运行图编辑工具。从 JSON 文件加载线路数据，在左侧画布绘制轨道，在右侧表格编辑数据，两边实时同步。
 
-## 功能概览
+## 功能
 
-- 绘制铁路轨道
-- 绘制并移动火车点
-- 支持开始、停止、重置动画
-- 显示全局模拟时钟
-- 通过 `TrainPath` 组织一条或多条首尾相接的轨道
+- 线路图绘制：每条区间渲染三条线段（黑色中线、红色上行线、绿色下行线）及站名标注
+- 数据绑定：表格编辑实时反映到画布，支持增删线路和区间、上下移动线路
+- 文件读写：打开/保存 JSON 格式的运行图数据
+- 单选框样式：布尔列以空心/实心圆展示，点击切换
+- 画布缩放：+/- 按钮调整显示比例（1–10），# 恢复默认
 
-## 核心模型
+## 项目结构
 
-### RailwayTrack
+```text
+running_train/
+├── main.py              # 入口
+├── main_window.py       # 主窗口（UI + 交互逻辑）
+├── models.py            # 数据模型 + JSON 序列化
+├── canvas.py            # 自定义画布（轨道绘制）
+├── delegates.py         # 单选框委托（空心/实心圆）
+├── requirements.txt
+├── README.md
+└── data/
+    └── 上海周边.json      # 示例数据
+```
 
-`RailwayTrack` 表示一段轨道，包含：
+## 数据模型
 
-- `id`: 轨道 ID
-- `name`: 轨道名称
-- `length`: 轨道长度
-- `angle`: 轨道角度，单位为度
-- `start_point`: 轨道起点坐标
-- `end_point()`: 根据起点、长度和角度计算终点坐标
-
-### TrainPath
-
-`TrainPath` 表示列车路径，由一条或多条轨道组成：
-
-- 创建时传入路径起始点坐标
-- 使用 `add_track(track)` 逐条添加轨道
-- 第一条轨道起点会设为路径起始点
-- 后续轨道起点会自动设为上一条轨道的终点
-
-示例：
-
-```python
-path = TrainPath((100, 100))
-track_a = path.add_track(RailwayTrack("T001", "A段", 500, 45))
-track_b = path.add_track(RailwayTrack("T002", "B段", 300, 90))
+```text
+TrainGraph
+├── name, length, width, scale
+└── RailwayPath[]
+    ├── id, name, start_point, angle, hidden
+    └── RailwayTrack[]
+        ├── head_station, tail_station
+        ├── length, deflection
+        └── draw_head, draw_tail
 ```
 
 ## 安装
-
-1. 确保已安装 Python。
-2. 安装依赖：
 
 ```bash
 pip install -r requirements.txt
@@ -53,28 +48,4 @@ pip install -r requirements.txt
 
 ```bash
 python main.py
-```
-
-## Qt Designer 工作流
-
-界面文件位于 `ui/main_window.ui`。如果修改了 UI，需要重新生成 Python 文件：
-
-```bash
-pyside6-uic ui/main_window.ui -o ui/main_window.py
-```
-
-业务逻辑建议写在 `main.py` 中，避免直接修改自动生成的 `ui/main_window.py`。
-
-## 项目结构
-
-```text
-running_train/
-├── main.py
-├── requirements.txt
-├── README.md
-├── QT_DESIGNER_GUIDE.md
-└── ui/
-    ├── __init__.py
-    ├── main_window.ui
-    └── main_window.py
 ```
