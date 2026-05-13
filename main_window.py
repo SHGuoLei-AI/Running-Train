@@ -1,7 +1,7 @@
 import os
 from PySide6.QtWidgets import (QMainWindow, QMessageBox, QWidget, QLabel,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QHBoxLayout,
-                               QPushButton, QLineEdit, QFileDialog, QScrollArea)
+                               QPushButton, QLineEdit, QFileDialog, QScrollArea, QSplitter)
 from PySide6.QtCore import Qt
 from models import (TrainGraph, RailwayPath, RailwayTrack,
                     load_train_graph_from_json, save_train_graph_to_json)
@@ -140,11 +140,15 @@ class MainWindow(QMainWindow):
         self.scale_reset_btn.clicked.connect(self.on_scale_reset_clicked)
         self.scale_minus_btn = QPushButton(" - ")
         self.scale_minus_btn.clicked.connect(self.on_scale_minus_clicked)
+        self.toggle_panel_btn = QPushButton(" ▸ ")
+        self.toggle_panel_btn.setToolTip("显示/隐藏数据面板")
+        self.toggle_panel_btn.clicked.connect(self.on_toggle_panel_clicked)
         scale_btn_row = QHBoxLayout()
         scale_btn_row.addStretch()
         scale_btn_row.addWidget(self.scale_plus_btn)
         scale_btn_row.addWidget(self.scale_reset_btn)
         scale_btn_row.addWidget(self.scale_minus_btn)
+        scale_btn_row.addWidget(self.toggle_panel_btn)
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(False)
@@ -154,11 +158,21 @@ class MainWindow(QMainWindow):
         left_panel.addWidget(self.scroll_area, stretch=1)
         left_panel.addLayout(scale_btn_row)
 
+        left_container = QWidget()
+        left_container.setLayout(left_panel)
+
+        self._splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._splitter.addWidget(left_container)
+        self._splitter.addWidget(self.data_panel)
+        self._splitter.setCollapsible(1, False)
+        self.data_panel.setMinimumWidth(50)
+        self._splitter.setStretchFactor(0, 1)
+        self._splitter.setStretchFactor(1, 0)
+
         canvas_layout = self.canvas_widget.layout() or QHBoxLayout(self.canvas_widget)
         while canvas_layout.count():
             canvas_layout.takeAt(0)
-        canvas_layout.addLayout(left_panel, stretch=3)
-        canvas_layout.addWidget(self.data_panel, stretch=1)
+        canvas_layout.addWidget(self._splitter)
 
         self.refresh_train_path_table()
         self.update_graph_param_fields()
@@ -172,6 +186,27 @@ class MainWindow(QMainWindow):
 
     def on_about_clicked(self):
         QMessageBox.about(self, "关于", "欢迎使用动态模拟火车运行图")
+
+    _panel_last_width = 300
+
+    def init_splitter_sizes(self):
+        w = self.width()
+        self._splitter.setSizes([w - 600, 600])
+
+    def on_toggle_panel_clicked(self):
+        visible = self.data_panel.isVisible()
+        if visible:
+            sizes = self._splitter.sizes()
+            if sizes[1] > 0:
+                self._panel_last_width = sizes[1]
+            self.data_panel.setVisible(False)
+            self.toggle_panel_btn.setText(" ◂ ")
+        else:
+            self.data_panel.setVisible(True)
+            total = sum(self._splitter.sizes())
+            w = max(self._panel_last_width, 150)
+            self._splitter.setSizes([total - w, w])
+            self.toggle_panel_btn.setText(" ▸ ")
 
     # ── 缩放按钮 ─────────────────────────────────────────
 

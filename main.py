@@ -5,5 +5,6 @@ from main_window import MainWindow
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
-    window.show()
+    window.showMaximized()
+    window.init_splitter_sizes()
     sys.exit(app.exec())
