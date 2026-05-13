@@ -117,11 +117,14 @@ class MainWindow(QMainWindow):
         self.rail_track_table.setItemDelegateForColumn(2, self._radio_delegate)
 
         self.track_btn_layout = QHBoxLayout()
+        self.insert_track_button = QPushButton("  插入区间  ")
+        self.insert_track_button.clicked.connect(self.on_insert_track_clicked)
         self.add_track_button = QPushButton("  新增区间  ")
         self.add_track_button.clicked.connect(self.on_add_track_clicked)
         self.delete_track_button = QPushButton("  删除区间  ")
         self.delete_track_button.clicked.connect(self.on_delete_track_clicked)
         self.track_btn_layout.addStretch()
+        self.track_btn_layout.addWidget(self.insert_track_button)
         self.track_btn_layout.addWidget(self.add_track_button)
         self.track_btn_layout.addWidget(self.delete_track_button)
 
@@ -460,10 +463,12 @@ class MainWindow(QMainWindow):
                 track.tail_station = item.text().strip()
             elif col == 4:
                 track.length = int(float(item.text().strip()))
-                for i in range(row + 1, len(path.tracks)):
-                    path.tracks[i].start_point = path.tracks[i - 1].end_point()
             elif col == 5:
                 track.deflection = int(float(item.text().strip()))
+
+            if col in (4, 5):
+                for i in range(row + 1, len(path.tracks)):
+                    path.tracks[i].start_point = path.tracks[i - 1].end_point()
         except ValueError:
             pass
         self._update_path_computed_columns(sel_row)
@@ -479,6 +484,39 @@ class MainWindow(QMainWindow):
         current = item.data(Qt.ItemDataRole.CheckStateRole)
         new_state = Qt.CheckState.Unchecked if current == Qt.CheckState.Checked else Qt.CheckState.Checked
         item.setData(Qt.ItemDataRole.CheckStateRole, new_state)
+
+    def on_insert_track_clicked(self):
+        sel_row = self.train_path_table.currentRow()
+        if sel_row < 0 or sel_row >= len(self.train_graph.train_paths):
+            return
+        path = self.train_graph.train_paths[sel_row]
+        if not path.tracks:
+            return
+
+        track_row = self.rail_track_table.currentRow()
+        if track_row < 0 or track_row >= len(path.tracks) - 1:
+            # 选中的是最后一个或未选中，等同新增
+            self.on_add_track_clicked()
+            return
+
+        nxt = path.tracks[track_row + 1]
+        old_head = nxt.head_station
+        nxt.head_station = "新站"
+
+        new_track = RailwayTrack(length=10, deflection=0, head_station=old_head, tail_station="新站")
+        path.tracks.insert(track_row + 1, new_track)
+
+        # 级联更新后续区间起点
+        for i in range(track_row, len(path.tracks)):
+            if i == 0:
+                path.tracks[i].start_point = path.start_point
+            else:
+                path.tracks[i].start_point = path.tracks[i - 1].end_point()
+
+        self.refresh_rail_track_table(sel_row)
+        self.refresh_train_path_table()
+        self.rail_track_table.setCurrentCell(track_row + 1, 1)
+        self.canvas.update()
 
     def on_add_track_clicked(self):
         row = self.train_path_table.currentRow()
