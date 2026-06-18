@@ -70,7 +70,7 @@ print(f"Stations: {len(si_n)}, Trains: {len(ti_n)}")
 # Step 2.5: Parse xw.dat (compound train split markers by distance, ~116KB)
 split_data = {}
 for name, data in res_files.items():
-    if 100000 < len(data) < 150000:
+    if 80000 < len(data) < 150000:
         try:
             ct = rk(data, 0)
             off = 2
@@ -83,15 +83,15 @@ for name, data in res_files.items():
                     payload = data[off+2:off+2+sz]
                     ns = payload[2] & 0xFF
                     markers = [(rk(payload, 3+j*3), payload[5+j*3] & 0xFF) for j in range(ns) if 5+j*3 < len(payload)]
-                    # Validate: first marker should have dist=0
-                    if markers and markers[0][0] == 0:
+                    # ns should be 0-5 (reasonable); first marker dist=0
+                    if 0 <= ns <= 5 and markers and markers[0][0] == 0:
                         split_data[key] = markers
                 off += 5 + n*3
         except: pass
-    if len(split_data) > 1000: break  # xw.dat has ~4.6K records with splits
-    else: split_data = {}
-if split_data: print(f"Split markers: {name} ({len(split_data)} entries)")
-else: print("No split markers found (xw.dat)")
+    if len(split_data) > 1000:
+        print(f"Split markers: {name} ({len(split_data)} entries)")
+        break
+    split_data = {}
 
 # Step 3: Find all tN.dat files (DataMgr format, ~66-69KB)
 t_files = []
