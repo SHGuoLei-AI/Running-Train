@@ -67,6 +67,32 @@ for _ in range(ti_ct):
 
 print(f"Stations: {len(si_n)}, Trains: {len(ti_n)}")
 
+# Step 2.5: Parse xw.dat (compound train split markers by distance, ~116KB)
+split_data = {}
+for name, data in res_files.items():
+    if 100000 < len(data) < 150000:
+        try:
+            ct = rk(data, 0)
+            off = 2
+            for _ in range(ct):
+                if off+5 > len(data): break
+                key = rk(data, off)
+                n = data[off+4] & 0xFF
+                sz = n*3+3
+                if off+2+sz <= len(data):
+                    payload = data[off+2:off+2+sz]
+                    ns = payload[2] & 0xFF
+                    markers = [(rk(payload, 3+j*3), payload[5+j*3] & 0xFF) for j in range(ns) if 5+j*3 < len(payload)]
+                    # Validate: first marker should have dist=0
+                    if markers and markers[0][0] == 0:
+                        split_data[key] = markers
+                off += 5 + n*3
+        except: pass
+    if len(split_data) > 1000: break  # xw.dat has ~4.6K records with splits
+    else: split_data = {}
+if split_data: print(f"Split markers: {name} ({len(split_data)} entries)")
+else: print("No split markers found (xw.dat)")
+
 # Step 3: Find all tN.dat files (DataMgr format, ~66-69KB)
 t_files = []
 for name, data in res_files.items():
@@ -87,10 +113,29 @@ for data in t_files:
 print(f"Parsed {len(all_trains)} train info records")
 
 # Step 5: Decode and export
-def decode_train(info):
+def decode_train(info, compound_parts, split_markers=None):
+    """split_markers: list of (distance_km, part_idx) from xw.dat"""
     n = rk(info, 13)
     stops = []
+    segment = 0
     for i in range(n):
+        # Determine segment from distance-based split markers
+        if split_markers:
+            pos = 15 + i*7
+            if pos+7 <= len(info):
+                dist = rk(info, pos+5)
+                segment = 0
+                for marker_dist, marker_part in split_markers:
+                    if marker_dist > dist: break
+                    segment = marker_part
+
+        if compound_parts and segment < len(compound_parts):
+            train_no = compound_parts[segment]
+        elif compound_parts:
+            train_no = compound_parts[0]
+        else:
+            train_no = ""
+
         pos = 15 + i*7
         if pos+7 > len(info): break
         st = rk(info, pos)
@@ -101,7 +146,8 @@ def decode_train(info):
         while dep_m >= 60: dep_h += 1; dep_m -= 60
         arrive = f"{dep_h:02d}:{dep_m:02d}" if i == 0 else f"{arr_h:02d}:{arr_m:02d}"
         stops.append({
-            'station': name, 'arrive': arrive,
+            'station': name, 'train_no': train_no,
+            'arrive': arrive,
             'depart': f"{dep_h:02d}:{dep_m:02d}", 'dwell': dwell, 'distance': dist
         })
     return stops
@@ -125,13 +171,16 @@ if not ver:
 csv_path = os.path.join(os.path.dirname(os.path.abspath(APK)), f'train_schedule_{ver}.csv')
 with open(csv_path, 'w', newline='', encoding='utf-8-sig') as f:
     w = csv.writer(f)
-    w.writerow(['车次','站序','站名','到点','开点','停时(分)','里程(km)'])
+    w.writerow(['全车次','本站车次','站序','站名','到点','开点','停时(分)','里程(km)'])
     rows = 0
     for ti_idx in range(len(ti_n)):
         if ti_idx not in all_trains: continue
-        info = all_trains[ti_idx]; stops = decode_train(info)
+        info = all_trains[ti_idx]
+        parts = ti_n[ti_idx].split('/')
+        markers = split_data.get(ti_idx)
+        stops = decode_train(info, parts, markers)
         for i, s in enumerate(stops):
-            w.writerow([ti_n[ti_idx], i+1, s['station'], s['arrive'], s['depart'], s['dwell'], s['distance']])
+            w.writerow([ti_n[ti_idx], s['train_no'], i+1, s['station'], s['arrive'], s['depart'], s['dwell'], s['distance']])
             rows += 1
 
 print(f"\nDone! CSV: {csv_path}")
