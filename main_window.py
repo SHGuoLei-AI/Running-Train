@@ -25,8 +25,12 @@ class MainWindow(QMainWindow):
 
         # 菜单栏
         self.menu_file = self.menuBar().addMenu("文件(&F)")
+        self.menu_tools = self.menuBar().addMenu("工具(&T)")
         self.menu_help = self.menuBar().addMenu("帮助(&H)")
         self.action_exit = self.menu_file.addAction("退出")
+        self.action_route_editor = self.menu_tools.addAction("经由编辑(&R)...")
+        self.action_route_matched_trains = self.menu_tools.addAction("经由匹配的车次")
+        self.action_train_matched_routes = self.menu_tools.addAction("车次匹配的经由")
         self.action_about = self.menu_help.addAction("关于")
 
         # 文件菜单：打开、保存、另存为
@@ -186,9 +190,27 @@ class MainWindow(QMainWindow):
     def connect_signals(self):
         self.action_exit.triggered.connect(self.close)
         self.action_about.triggered.connect(self.on_about_clicked)
+        self.action_route_editor.triggered.connect(self.on_route_editor_clicked)
+        self.action_route_matched_trains.triggered.connect(self.on_route_matched_trains_clicked)
+        self.action_train_matched_routes.triggered.connect(self.on_train_matched_routes_clicked)
 
     def on_about_clicked(self):
         QMessageBox.about(self, "关于", "欢迎使用动态模拟火车运行图")
+
+    def on_route_editor_clicked(self):
+        from route_editor import RouteEditorDialog
+        dlg = RouteEditorDialog(self)
+        dlg.exec()
+
+    def on_route_matched_trains_clicked(self):
+        from train_match_dialogs import RouteMatchTrainsDialog
+        dlg = RouteMatchTrainsDialog(self)
+        dlg.exec()
+
+    def on_train_matched_routes_clicked(self):
+        from train_match_dialogs import TrainMatchRoutesDialog
+        dlg = TrainMatchRoutesDialog(self)
+        dlg.exec()
 
     _panel_last_width = 300
 

@@ -5,103 +5,13 @@
         "name": "上海周边",
         "length": 450,
         "width": 330,
-        "scale": 3,
+        "scale": 4,
         "paths": [
-            {
-                "id": "BYJ",
-                "name": "北沿江高铁（沪渝蓉）",
-                "start_x": 50,
-                "start_y": 50,
-                "angle": 0,
-                "hidden": false,
-                "tracks": [
-                    {
-                        "head_station": "南京北",
-                        "tail_station": "扬州南",
-                        "length": 100,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": false
-                    },
-                    {
-                        "head_station": "扬州南",
-                        "tail_station": "泰州南",
-                        "length": 60,
-                        "deflection": 0,
-                        "draw_start": true,
-                        "draw_end": false
-                    },
-                    {
-                        "head_station": "泰州南",
-                        "tail_station": "泰兴",
-                        "length": 60,
-                        "deflection": 0,
-                        "draw_start": true,
-                        "draw_end": false
-                    },
-                    {
-                        "head_station": "泰兴",
-                        "tail_station": "南通西",
-                        "length": 60,
-                        "deflection": 0,
-                        "draw_start": true,
-                        "draw_end": false
-                    },
-                    {
-                        "head_station": "南通西",
-                        "tail_station": "南通",
-                        "length": 10,
-                        "deflection": 0,
-                        "draw_start": true,
-                        "draw_end": false
-                    },
-                    {
-                        "head_station": "南通",
-                        "tail_station": "海门南",
-                        "length": 30,
-                        "deflection": 0,
-                        "draw_start": true,
-                        "draw_end": false
-                    },
-                    {
-                        "head_station": "海门南",
-                        "tail_station": "启东西",
-                        "length": 50,
-                        "deflection": 0,
-                        "draw_start": true,
-                        "draw_end": false
-                    },
-                    {
-                        "head_station": "启东西",
-                        "tail_station": "崇明",
-                        "length": 40,
-                        "deflection": 0,
-                        "draw_start": true,
-                        "draw_end": false
-                    },
-                    {
-                        "head_station": "崇明",
-                        "tail_station": "太仓",
-                        "length": 40,
-                        "deflection": 0,
-                        "draw_start": true,
-                        "draw_end": false
-                    },
-                    {
-                        "head_station": "太仓",
-                        "tail_station": "上海宝山",
-                        "length": 30,
-                        "deflection": 0,
-                        "draw_start": true,
-                        "draw_end": false
-                    }
-                ]
-            },
             {
                 "id": "NQX",
                 "name": "宁启线",
-                "start_x": 50,
-                "start_y": 20,
+                "start_x": 10,
+                "start_y": 10,
                 "angle": 0,
                 "hidden": false,
                 "tracks": [
@@ -110,71 +20,357 @@
                         "tail_station": "六合",
                         "length": 35,
                         "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
+                        "draw_start": true,
+                        "draw_end": false
                     },
                     {
                         "head_station": "六合",
                         "tail_station": "仪征",
                         "length": 30,
                         "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
+                        "draw_start": true,
+                        "draw_end": false
                     },
                     {
                         "head_station": "仪征",
                         "tail_station": "扬州",
                         "length": 21,
                         "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
+                        "draw_start": true,
+                        "draw_end": false
                     },
                     {
                         "head_station": "扬州",
-                        "tail_station": "江都",
-                        "length": 25,
+                        "tail_station": "泰安镇",
+                        "length": 18,
                         "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "泰安镇",
+                        "tail_station": "江都",
+                        "length": 7,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
                     },
                     {
                         "head_station": "江都",
                         "tail_station": "泰州",
                         "length": 39,
                         "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
+                        "draw_start": true,
+                        "draw_end": false
                     },
                     {
                         "head_station": "泰州",
                         "tail_station": "姜堰",
                         "length": 14,
                         "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
+                        "draw_start": true,
+                        "draw_end": false
                     },
                     {
                         "head_station": "姜堰",
-                        "tail_station": "海安县",
+                        "tail_station": "海安",
                         "length": 40,
                         "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
+                        "draw_start": true,
+                        "draw_end": false
                     },
                     {
-                        "head_station": "海安县",
+                        "head_station": "海安",
                         "tail_station": "如皋",
                         "length": 20,
                         "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
+                        "draw_start": true,
+                        "draw_end": false
                     },
                     {
                         "head_station": "如皋",
-                        "tail_station": "南通",
-                        "length": 45,
+                        "tail_station": "赵甸",
+                        "length": 31,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "赵甸",
+                        "tail_station": "平东所",
+                        "length": 3,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "平东所",
+                        "tail_station": "陈桥所",
+                        "length": 2,
                         "deflection": 0,
                         "draw_start": false,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "陈桥所",
+                        "tail_station": "南通",
+                        "length": 9,
+                        "deflection": 0,
+                        "draw_start": false,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "南通",
+                        "tail_station": "海门",
+                        "length": 38,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "海门",
+                        "tail_station": "启东",
+                        "length": 45,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": true
+                    }
+                ]
+            },
+            {
+                "id": "BYJ",
+                "name": "北沿江高铁（沪渝蓉）",
+                "start_x": 10,
+                "start_y": 30,
+                "angle": 0,
+                "hidden": false,
+                "tracks": [
+                    {
+                        "head_station": "南京北",
+                        "tail_station": "六合西",
+                        "length": 25,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "六合西",
+                        "tail_station": "仪征北",
+                        "length": 32,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "仪征北",
+                        "tail_station": "扬州东",
+                        "length": 44,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "扬州东",
+                        "tail_station": "泰州南",
+                        "length": 45,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "泰州南",
+                        "tail_station": "黄桥",
+                        "length": 32,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "黄桥",
+                        "tail_station": "如皋西",
+                        "length": 30,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "如皋西",
+                        "tail_station": "南通",
+                        "length": 35,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "南通",
+                        "tail_station": "海门北",
+                        "length": 30,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "海门北",
+                        "tail_station": "启东西",
+                        "length": 45,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "启东西",
+                        "tail_station": "崇明",
+                        "length": 26,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "崇明",
+                        "tail_station": "太仓",
+                        "length": 30,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "太仓",
+                        "tail_station": "上海宝山",
+                        "length": 34,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": true
+                    }
+                ]
+            },
+            {
+                "id": "HST",
+                "name": "沪苏通线",
+                "start_x": 250,
+                "start_y": 50,
+                "angle": 90,
+                "hidden": false,
+                "tracks": [
+                    {
+                        "head_station": "赵甸",
+                        "tail_station": "南通西",
+                        "length": 6,
+                        "deflection": -90,
+                        "draw_start": false,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "南通西",
+                        "tail_station": "张家港",
+                        "length": 34,
+                        "deflection": -90,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "张家港",
+                        "tail_station": "常熟",
+                        "length": 18,
+                        "deflection": -90,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "常熟",
+                        "tail_station": "太仓",
+                        "length": 48,
+                        "deflection": -90,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "太仓",
+                        "tail_station": "陆渡所",
+                        "length": 4,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "陆渡所",
+                        "tail_station": "太仓南",
+                        "length": 10,
+                        "deflection": 0,
+                        "draw_start": false,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "太仓南",
+                        "tail_station": "安亭西",
+                        "length": 15,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "安亭西",
+                        "tail_station": "黄渡",
+                        "length": 8,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    }
+                ]
+            },
+            {
+                "id": "HT2",
+                "name": "沪苏通二期",
+                "start_x": 384,
+                "start_y": 50,
+                "angle": 0,
+                "hidden": false,
+                "tracks": [
+                    {
+                        "head_station": "太仓",
+                        "tail_station": "徐行",
+                        "length": 25,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "徐行",
+                        "tail_station": "上海宝山",
+                        "length": 9,
+                        "deflection": 0,
+                        "draw_start": false,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "上海宝山",
+                        "tail_station": "外高桥",
+                        "length": 21,
+                        "deflection": 90,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "外高桥",
+                        "tail_station": "曹路",
+                        "length": 16,
+                        "deflection": 90,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "曹路",
+                        "tail_station": "上海东",
+                        "length": 22,
+                        "deflection": 90,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "上海东",
+                        "tail_station": "四团",
+                        "length": 27,
+                        "deflection": 90,
+                        "draw_start": true,
                         "draw_end": true
                     }
                 ]
@@ -182,23 +378,23 @@
             {
                 "id": "NYJ",
                 "name": "南沿江高铁",
-                "start_x": 150,
-                "start_y": 150,
+                "start_x": 10,
+                "start_y": 70,
                 "angle": 0,
                 "hidden": false,
                 "tracks": [
                     {
                         "head_station": "南京南",
-                        "tail_station": "江宁",
-                        "length": 10,
-                        "deflection": 90,
-                        "draw_start": false,
+                        "tail_station": "高新园所",
+                        "length": 16,
+                        "deflection": 0,
+                        "draw_start": true,
                         "draw_end": false
                     },
                     {
-                        "head_station": "江宁",
+                        "head_station": "高新园所",
                         "tail_station": "句容",
-                        "length": 10,
+                        "length": 25,
                         "deflection": 0,
                         "draw_start": true,
                         "draw_end": false
@@ -206,7 +402,7 @@
                     {
                         "head_station": "句容",
                         "tail_station": "金坛",
-                        "length": 10,
+                        "length": 45,
                         "deflection": 0,
                         "draw_start": true,
                         "draw_end": false
@@ -214,27 +410,59 @@
                     {
                         "head_station": "金坛",
                         "tail_station": "武进",
-                        "length": 10,
+                        "length": 39,
                         "deflection": 0,
                         "draw_start": true,
                         "draw_end": false
                     },
                     {
                         "head_station": "武进",
-                        "tail_station": "新尾站",
-                        "length": 10,
+                        "tail_station": "江阴",
+                        "length": 40,
                         "deflection": 0,
                         "draw_start": true,
                         "draw_end": false
+                    },
+                    {
+                        "head_station": "江阴",
+                        "tail_station": "张家港",
+                        "length": 45,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "张家港",
+                        "tail_station": "常熟",
+                        "length": 17,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "常熟",
+                        "tail_station": "岳东村所",
+                        "length": 43,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "岳东村所",
+                        "tail_station": "太仓",
+                        "length": 5,
+                        "deflection": 0,
+                        "draw_start": false,
+                        "draw_end": true
                     }
                 ]
             },
             {
                 "id": "JHP",
                 "name": "京沪线沪宁段",
-                "start_x": 150,
-                "start_y": 500,
-                "angle": 90,
+                "start_x": 10,
+                "start_y": 90,
+                "angle": 0,
                 "hidden": false,
                 "tracks": [
                     {
@@ -242,7 +470,7 @@
                         "tail_station": "镇江",
                         "length": 63,
                         "deflection": 0,
-                        "draw_start": false,
+                        "draw_start": true,
                         "draw_end": true
                     },
                     {
@@ -306,8 +534,8 @@
                         "tail_station": "上海西",
                         "length": 16,
                         "deflection": 0,
-                        "draw_start": true,
-                        "draw_end": true
+                        "draw_start": false,
+                        "draw_end": false
                     },
                     {
                         "head_station": "上海西",
@@ -315,89 +543,15 @@
                         "length": 5,
                         "deflection": 0,
                         "draw_start": false,
-                        "draw_end": false
-                    }
-                ]
-            },
-            {
-                "id": "JHG",
-                "name": "京沪高速线沪宁段",
-                "start_x": 56,
-                "start_y": 90,
-                "angle": 0,
-                "hidden": false,
-                "tracks": [
-                    {
-                        "head_station": "南京南",
-                        "tail_station": "镇江南",
-                        "length": 65,
-                        "deflection": 0,
-                        "draw_start": false,
                         "draw_end": true
-                    },
-                    {
-                        "head_station": "镇江南",
-                        "tail_station": "丹阳北",
-                        "length": 32,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "丹阳北",
-                        "tail_station": "常州北",
-                        "length": 33,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "常州北",
-                        "tail_station": "无锡东",
-                        "length": 57,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "无锡东",
-                        "tail_station": "苏州北",
-                        "length": 27,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "苏州北",
-                        "tail_station": "昆山南",
-                        "length": 31,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "昆山南",
-                        "tail_station": "黄渡所*",
-                        "length": 35,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "黄渡所*",
-                        "tail_station": "上海虹桥",
-                        "length": 15,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": false
                     }
                 ]
             },
             {
                 "id": "HNC",
-                "name": "沪宁高速线",
-                "start_x": 50,
-                "start_y": 60,
+                "name": "沪宁高铁",
+                "start_x": 10,
+                "start_y": 110,
                 "angle": 0,
                 "hidden": false,
                 "tracks": [
@@ -406,7 +560,7 @@
                         "tail_station": "仙林",
                         "length": 13,
                         "deflection": 0,
-                        "draw_start": false,
+                        "draw_start": true,
                         "draw_end": true
                     },
                     {
@@ -463,7 +617,7 @@
                         "length": 14,
                         "deflection": 0,
                         "draw_start": false,
-                        "draw_end": true
+                        "draw_end": false
                     },
                     {
                         "head_station": "惠山",
@@ -543,7 +697,7 @@
                         "length": 11,
                         "deflection": 0,
                         "draw_start": false,
-                        "draw_end": true
+                        "draw_end": false
                     },
                     {
                         "head_station": "南翔北所*",
@@ -551,7 +705,7 @@
                         "length": 4,
                         "deflection": 0,
                         "draw_start": false,
-                        "draw_end": false
+                        "draw_end": true
                     },
                     {
                         "head_station": "南翔北",
@@ -567,6 +721,98 @@
                         "length": 5,
                         "deflection": 0,
                         "draw_start": false,
+                        "draw_end": true
+                    }
+                ]
+            },
+            {
+                "id": "JHG",
+                "name": "京沪高铁沪宁段",
+                "start_x": 23,
+                "start_y": 133,
+                "angle": 0,
+                "hidden": false,
+                "tracks": [
+                    {
+                        "head_station": "南京南",
+                        "tail_station": "镇江南",
+                        "length": 65,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": true
+                    },
+                    {
+                        "head_station": "镇江南",
+                        "tail_station": "丹阳北",
+                        "length": 32,
+                        "deflection": 0,
+                        "draw_start": false,
+                        "draw_end": true
+                    },
+                    {
+                        "head_station": "丹阳北",
+                        "tail_station": "常州北",
+                        "length": 33,
+                        "deflection": 0,
+                        "draw_start": false,
+                        "draw_end": true
+                    },
+                    {
+                        "head_station": "常州北",
+                        "tail_station": "无锡东",
+                        "length": 57,
+                        "deflection": 0,
+                        "draw_start": false,
+                        "draw_end": true
+                    },
+                    {
+                        "head_station": "无锡东",
+                        "tail_station": "苏州北",
+                        "length": 27,
+                        "deflection": 0,
+                        "draw_start": false,
+                        "draw_end": true
+                    },
+                    {
+                        "head_station": "苏州北",
+                        "tail_station": "昆山南",
+                        "length": 31,
+                        "deflection": 0,
+                        "draw_start": false,
+                        "draw_end": true
+                    },
+                    {
+                        "head_station": "昆山南",
+                        "tail_station": "黄渡所*",
+                        "length": 35,
+                        "deflection": 0,
+                        "draw_start": false,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "黄渡所*",
+                        "tail_station": "上海虹桥",
+                        "length": 15,
+                        "deflection": 0,
+                        "draw_start": false,
+                        "draw_end": true
+                    }
+                ]
+            },
+            {
+                "id": "XNL",
+                "name": "仙宁线",
+                "start_x": 23,
+                "start_y": 133,
+                "angle": -90,
+                "hidden": false,
+                "tracks": [
+                    {
+                        "head_station": "南京南",
+                        "tail_station": "仙林",
+                        "length": 23,
+                        "deflection": 0,
+                        "draw_start": false,
                         "draw_end": false
                     }
                 ]
@@ -575,23 +821,23 @@
                 "id": "HKP",
                 "name": "沪昆线沪杭段",
                 "start_x": 390,
-                "start_y": 80,
-                "angle": 125,
+                "start_y": 120,
+                "angle": 135,
                 "hidden": false,
                 "tracks": [
                     {
                         "head_station": "上海",
                         "tail_station": "上海西",
                         "length": 5,
-                        "deflection": -35,
-                        "draw_start": false,
-                        "draw_end": true
+                        "deflection": -45,
+                        "draw_start": true,
+                        "draw_end": false
                     },
                     {
                         "head_station": "上海西",
                         "tail_station": "封浜",
                         "length": 14,
-                        "deflection": -35,
+                        "deflection": -45,
                         "draw_start": false,
                         "draw_end": true
                     },
@@ -599,7 +845,7 @@
                         "head_station": "封浜",
                         "tail_station": "七宝",
                         "length": 12,
-                        "deflection": -35,
+                        "deflection": -45,
                         "draw_start": false,
                         "draw_end": true
                     },
@@ -607,7 +853,7 @@
                         "head_station": "七宝",
                         "tail_station": "春申",
                         "length": 9,
-                        "deflection": -35,
+                        "deflection": -45,
                         "draw_start": false,
                         "draw_end": false
                     },
@@ -615,20 +861,20 @@
                         "head_station": "春申",
                         "tail_station": "新桥",
                         "length": 5,
-                        "deflection": -35,
+                        "deflection": -45,
                         "draw_start": false,
                         "draw_end": false
                     },
                     {
                         "head_station": "新桥",
-                        "tail_station": "松江",
+                        "tail_station": "上海松江",
                         "length": 11,
-                        "deflection": -35,
+                        "deflection": -45,
                         "draw_start": false,
                         "draw_end": true
                     },
                     {
-                        "head_station": "松江",
+                        "head_station": "上海松江",
                         "tail_station": "枫泾",
                         "length": 26,
                         "deflection": 0,
@@ -695,22 +941,22 @@
             },
             {
                 "id": "HKG",
-                "name": "沪昆高速线沪杭段",
-                "start_x": 351,
-                "start_y": 120,
-                "angle": 125,
+                "name": "沪昆高铁沪杭段",
+                "start_x": 360,
+                "start_y": 160,
+                "angle": 135,
                 "hidden": false,
                 "tracks": [
                     {
                         "head_station": "上海虹桥",
-                        "tail_station": "松江南",
+                        "tail_station": "上海松江",
                         "length": 31,
                         "deflection": 0,
-                        "draw_start": false,
+                        "draw_start": true,
                         "draw_end": true
                     },
                     {
-                        "head_station": "松江南",
+                        "head_station": "上海松江",
                         "tail_station": "金山北",
                         "length": 17,
                         "deflection": 0,
@@ -768,10 +1014,92 @@
                 ]
             },
             {
-                "id": "NHC",
-                "name": "宁杭高速线",
-                "start_x": 56,
-                "start_y": 120,
+                "id": "HSH",
+                "name": "沪苏湖高铁",
+                "start_x": 330,
+                "start_y": 150,
+                "angle": 180,
+                "hidden": false,
+                "tracks": [
+                    {
+                        "head_station": "上海虹桥",
+                        "tail_station": "春申南所",
+                        "length": 14,
+                        "deflection": -45,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "春申南所",
+                        "tail_station": "上海松江",
+                        "length": 17,
+                        "deflection": -45,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "上海松江",
+                        "tail_station": "练塘",
+                        "length": 19,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "练塘",
+                        "tail_station": "苏州南",
+                        "length": 24,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "苏州南",
+                        "tail_station": "盛泽",
+                        "length": 30,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "盛泽",
+                        "tail_station": "湖州南浔",
+                        "length": 18,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "湖州南浔",
+                        "tail_station": "湖州东",
+                        "length": 22,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "湖州东",
+                        "tail_station": "康山所",
+                        "length": 13,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "康山所",
+                        "tail_station": "湖州",
+                        "length": 7,
+                        "deflection": 0,
+                        "draw_start": false,
+                        "draw_end": true
+                    }
+                ]
+            },
+            {
+                "id": "NHG",
+                "name": "宁杭高铁",
+                "start_x": 40,
+                "start_y": 150,
                 "angle": 45,
                 "hidden": false,
                 "tracks": [
@@ -779,15 +1107,15 @@
                         "head_station": "南京南",
                         "tail_station": "江宁",
                         "length": 12,
-                        "deflection": -45,
-                        "draw_start": false,
+                        "deflection": 0,
+                        "draw_start": true,
                         "draw_end": true
                     },
                     {
                         "head_station": "江宁",
                         "tail_station": "句容西",
                         "length": 14,
-                        "deflection": -45,
+                        "deflection": 0,
                         "draw_start": false,
                         "draw_end": true
                     },
@@ -795,7 +1123,7 @@
                         "head_station": "句容西",
                         "tail_station": "溧水",
                         "length": 20,
-                        "deflection": -45,
+                        "deflection": 0,
                         "draw_start": false,
                         "draw_end": true
                     },
@@ -803,7 +1131,7 @@
                         "head_station": "溧水",
                         "tail_station": "瓦屋山",
                         "length": 22,
-                        "deflection": -45,
+                        "deflection": 0,
                         "draw_start": false,
                         "draw_end": true
                     },
@@ -819,7 +1147,7 @@
                         "head_station": "溧阳",
                         "tail_station": "宜兴",
                         "length": 31,
-                        "deflection": 0,
+                        "deflection": -45,
                         "draw_start": false,
                         "draw_end": true
                     },
@@ -827,7 +1155,7 @@
                         "head_station": "宜兴",
                         "tail_station": "长兴",
                         "length": 36,
-                        "deflection": 0,
+                        "deflection": -45,
                         "draw_start": false,
                         "draw_end": true
                     },
@@ -835,7 +1163,7 @@
                         "head_station": "长兴",
                         "tail_station": "湖州",
                         "length": 20,
-                        "deflection": 0,
+                        "deflection": -45,
                         "draw_start": false,
                         "draw_end": true
                     },
@@ -866,10 +1194,256 @@
                 ]
             },
             {
+                "id": "NAC",
+                "name": "宁安城际",
+                "start_x": 40,
+                "start_y": 200,
+                "angle": 90,
+                "hidden": false,
+                "tracks": [
+                    {
+                        "head_station": "南京南",
+                        "tail_station": "江宁西",
+                        "length": 25,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "江宁西",
+                        "tail_station": "马鞍山东",
+                        "length": 17,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "马鞍山东",
+                        "tail_station": "当涂东",
+                        "length": 15,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "当涂东",
+                        "tail_station": "芜湖",
+                        "length": 29,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "芜湖",
+                        "tail_station": "芜湖南",
+                        "length": 12,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": true
+                    }
+                ]
+            },
+            {
+                "id": "HHG",
+                "name": "合杭高铁",
+                "start_x": 30,
+                "start_y": 330,
+                "angle": 0,
+                "hidden": false,
+                "tracks": [
+                    {
+                        "head_station": "芜湖",
+                        "tail_station": "芜湖南",
+                        "length": 12,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "芜湖南",
+                        "tail_station": "湾沚南",
+                        "length": 32,
+                        "deflection": -45,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "湾沚南",
+                        "tail_station": "宣城",
+                        "length": 26,
+                        "deflection": -45,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "宣城",
+                        "tail_station": "郎溪南",
+                        "length": 38,
+                        "deflection": -45,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "郎溪南",
+                        "tail_station": "广德南",
+                        "length": 27,
+                        "deflection": -45,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "广德南",
+                        "tail_station": "安吉",
+                        "length": 20,
+                        "deflection": -90,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "安吉",
+                        "tail_station": "湖州",
+                        "length": 44,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "湖州",
+                        "tail_station": "妙西镇所",
+                        "length": 8,
+                        "deflection": 90,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "妙西镇所",
+                        "tail_station": "德清",
+                        "length": 28,
+                        "deflection": 90,
+                        "draw_start": false,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "德清",
+                        "tail_station": "范家漾所",
+                        "length": 13,
+                        "deflection": 90,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "范家漾所",
+                        "tail_station": "勾庄所",
+                        "length": 9,
+                        "deflection": 90,
+                        "draw_start": false,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "勾庄所",
+                        "tail_station": "杭州西",
+                        "length": 11,
+                        "deflection": 90,
+                        "draw_start": false,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "杭州西",
+                        "tail_station": "富阳西",
+                        "length": 36,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "富阳西",
+                        "tail_station": "桐庐东",
+                        "length": 24,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": true
+                    }
+                ]
+            },
+            {
+                "id": "NWH",
+                "name": "宁芜杭（宁铜皖赣宣杭）",
+                "start_x": 15,
+                "start_y": 160,
+                "angle": 0,
+                "hidden": false,
+                "tracks": [
+                    {
+                        "head_station": "南京",
+                        "tail_station": "马鞍山",
+                        "length": 78,
+                        "deflection": 90,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "马鞍山",
+                        "tail_station": "芜湖",
+                        "length": 47,
+                        "deflection": 90,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "芜湖",
+                        "tail_station": "宣城",
+                        "length": 64,
+                        "deflection": 90,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "宣城",
+                        "tail_station": "广德",
+                        "length": 63,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "广德",
+                        "tail_station": "长兴南",
+                        "length": 51,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "长兴南",
+                        "tail_station": "湖州",
+                        "length": 19,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "湖州",
+                        "tail_station": "德清西",
+                        "length": 39,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "德清西",
+                        "tail_station": "杭州",
+                        "length": 68,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": true
+                    }
+                ]
+            },
+            {
                 "id": "HYP",
                 "name": "杭甬线",
                 "start_x": 274,
-                "start_y": 330,
+                "start_y": 349,
                 "angle": 0,
                 "hidden": false,
                 "tracks": [
@@ -911,7 +1485,7 @@
                         "length": 48,
                         "deflection": 0,
                         "draw_start": false,
-                        "draw_end": false
+                        "draw_end": true
                     }
                 ]
             },
@@ -919,7 +1493,7 @@
                 "id": "HSX",
                 "name": "杭深线杭甬段",
                 "start_x": 290,
-                "start_y": 300,
+                "start_y": 330,
                 "angle": 0,
                 "hidden": false,
                 "tracks": [
@@ -969,156 +1543,6 @@
                         "length": 8,
                         "deflection": 0,
                         "draw_start": false,
-                        "draw_end": false
-                    }
-                ]
-            },
-            {
-                "id": "NTX",
-                "name": "宁铜线",
-                "start_x": 10,
-                "start_y": 60,
-                "angle": 90,
-                "hidden": false,
-                "tracks": [
-                    {
-                        "head_station": "南京",
-                        "tail_station": "中华门",
-                        "length": 33,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "中华门",
-                        "tail_station": "马鞍山",
-                        "length": 45,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "马鞍山",
-                        "tail_station": "芜湖",
-                        "length": 47,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "芜湖",
-                        "tail_station": "狮子山",
-                        "length": 74,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": false
-                    }
-                ]
-            },
-            {
-                "id": "TJX",
-                "name": "铜九线",
-                "start_x": 10,
-                "start_y": 259,
-                "angle": 90,
-                "hidden": false,
-                "tracks": [
-                    {
-                        "head_station": "狮子山",
-                        "tail_station": "铜陵",
-                        "length": 4,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "铜陵",
-                        "tail_station": "池州",
-                        "length": 57,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    }
-                ]
-            },
-            {
-                "id": "NAC",
-                "name": "宁安线",
-                "start_x": 35,
-                "start_y": 150,
-                "angle": 0,
-                "hidden": false,
-                "tracks": [
-                    {
-                        "head_station": "南京南",
-                        "tail_station": "江宁西",
-                        "length": 25,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "江宁西",
-                        "tail_station": "马鞍山东",
-                        "length": 17,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "马鞍山东",
-                        "tail_station": "当涂东",
-                        "length": 15,
-                        "deflection": 90,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "当涂东",
-                        "tail_station": "芜湖",
-                        "length": 29,
-                        "deflection": 90,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "芜湖",
-                        "tail_station": "弋江",
-                        "length": 12,
-                        "deflection": 90,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "弋江",
-                        "tail_station": "繁昌西",
-                        "length": 29,
-                        "deflection": 90,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "繁昌西",
-                        "tail_station": "铜陵",
-                        "length": 34,
-                        "deflection": 90,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "铜陵",
-                        "tail_station": "池州",
-                        "length": 50,
-                        "deflection": 90,
-                        "draw_start": false,
-                        "draw_end": true
-                    },
-                    {
-                        "head_station": "池州",
-                        "tail_station": "安庆",
-                        "length": 46,
-                        "deflection": 0,
-                        "draw_start": false,
                         "draw_end": true
                     }
                 ]
@@ -1126,8 +1550,8 @@
             {
                 "id": "JSX",
                 "name": "金山线",
-                "start_x": 430,
-                "start_y": 125,
+                "start_x": 390,
+                "start_y": 200,
                 "angle": 90,
                 "hidden": false,
                 "tracks": [
@@ -1136,7 +1560,7 @@
                         "tail_station": "车墩",
                         "length": 5,
                         "deflection": 0,
-                        "draw_start": false,
+                        "draw_start": true,
                         "draw_end": false
                     },
                     {
@@ -1174,12 +1598,94 @@
                 ]
             },
             {
+                "id": "HHG",
+                "name": "沪杭高铁",
+                "start_x": 418,
+                "start_y": 136,
+                "angle": 90,
+                "hidden": false,
+                "tracks": [
+                    {
+                        "head_station": "四团",
+                        "tail_station": "奉贤",
+                        "length": 24,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "奉贤",
+                        "tail_station": "上海金山",
+                        "length": 20,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "上海金山",
+                        "tail_station": "平湖市",
+                        "length": 32,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "平湖市",
+                        "tail_station": "嘉兴南",
+                        "length": 26,
+                        "deflection": 0,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "嘉兴南",
+                        "tail_station": "桐乡",
+                        "length": 29,
+                        "deflection": 45,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "桐乡",
+                        "tail_station": "临平北",
+                        "length": 31,
+                        "deflection": 45,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "临平北",
+                        "tail_station": "丁家墩所",
+                        "length": 18,
+                        "deflection": 45,
+                        "draw_start": true,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "丁家墩所",
+                        "tail_station": "勾庄所",
+                        "length": 5,
+                        "deflection": 45,
+                        "draw_start": false,
+                        "draw_end": false
+                    },
+                    {
+                        "head_station": "勾庄所",
+                        "tail_station": "杭州西",
+                        "length": 11,
+                        "deflection": 45,
+                        "draw_start": false,
+                        "draw_end": true
+                    }
+                ]
+            },
+            {
                 "id": "HNL",
                 "name": "黄南线",
                 "start_x": 430,
                 "start_y": 30,
                 "angle": 90,
-                "hidden": false,
+                "hidden": true,
                 "tracks": [
                     {
                         "head_station": "黄渡",
@@ -1213,7 +1719,7 @@
                 "start_x": 430,
                 "start_y": 61,
                 "angle": 90,
-                "hidden": false,
+                "hidden": true,
                 "tracks": [
                     {
                         "head_station": "上海南",
@@ -1222,24 +1728,6 @@
                         "deflection": 0,
                         "draw_start": false,
                         "draw_end": false
-                    }
-                ]
-            },
-            {
-                "id": "XNL",
-                "name": "仙宁线",
-                "start_x": 35,
-                "start_y": 90,
-                "angle": -90,
-                "hidden": false,
-                "tracks": [
-                    {
-                        "head_station": "南京南",
-                        "tail_station": "仙林",
-                        "length": 23,
-                        "deflection": 0,
-                        "draw_start": false,
-                        "draw_end": true
                     }
                 ]
             },
@@ -1285,7 +1773,7 @@
                 "start_x": 250,
                 "start_y": 293,
                 "angle": 90,
-                "hidden": false,
+                "hidden": true,
                 "tracks": [
                     {
                         "head_station": "笕桥",
@@ -1311,7 +1799,7 @@
                 "start_x": 215,
                 "start_y": 280,
                 "angle": 90,
-                "hidden": false,
+                "hidden": true,
                 "tracks": [
                     {
                         "head_station": "杭州东所",
@@ -1329,7 +1817,7 @@
                 "start_x": 250,
                 "start_y": 280,
                 "angle": 90,
-                "hidden": false,
+                "hidden": true,
                 "tracks": [
                     {
                         "head_station": "余杭",
