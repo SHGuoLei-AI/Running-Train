@@ -51,13 +51,13 @@ CREATE INDEX idx_ts_name ON train_stops(station_name);
 RG_SCHEMA = '''
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE train_graph (
-    name TEXT PRIMARY KEY, length INTEGER, width INTEGER, scale REAL DEFAULT 1
+    name TEXT PRIMARY KEY, length INTEGER, width INTEGER, scale INTEGER DEFAULT 1
 );
 CREATE TABLE railway_path (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     graph_name TEXT REFERENCES train_graph(name),
     code TEXT, name TEXT NOT NULL, kl_line_name TEXT,
-    start_x REAL, start_y REAL, angle REAL DEFAULT 0, hidden INTEGER DEFAULT 0
+    start_x INTEGER, start_y INTEGER, angle INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0
 );
 CREATE INDEX idx_rp_graph ON railway_path(graph_name);
 CREATE TABLE railway_track (
