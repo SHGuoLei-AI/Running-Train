@@ -104,7 +104,8 @@ def load_train_graph_from_json(json_file_path):
     return train_graph
 
 
-def save_train_graph_to_json(train_graph, file_path):
+def save_train_graph_to_json(train_graph, file_path, routes=None, route_stations=None):
+    """Save TrainGraph to JSON. Optionally include routes and route_stations."""
     data = {
         "TrainGraph": {
             "date": "",
@@ -137,6 +138,10 @@ def save_train_graph_to_json(train_graph, file_path):
             ]
         }
     }
+    if routes is not None:
+        data["TrainGraph"]["routes"] = routes
+    if route_stations is not None:
+        data["TrainGraph"]["route_stations"] = route_stations
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 

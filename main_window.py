@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 from PySide6.QtWidgets import (QMainWindow, QMessageBox, QWidget, QLabel,
@@ -317,7 +318,7 @@ class MainWindow(QMainWindow):
                 raise
 
     def on_import_json_clicked(self):
-        """Import a JSON file into the DB."""
+        """Import a JSON file into the DB (graph + optional routes)."""
         file_path, _ = QFileDialog.getOpenFileName(
             self, "导入 JSON 运行图",
             os.path.join(os.path.dirname(__file__), 'data'),
@@ -336,25 +337,87 @@ class MainWindow(QMainWindow):
             if reply != QMessageBox.StandardButton.Yes:
                 return
         save_train_graph_to_db(train_graph, self._db)
+
+        # Import routes if present in JSON
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        g = data.get('TrainGraph', data)
+        routes_data = g.get('routes', [])
+        route_stations_data = g.get('route_stations', [])
+        if routes_data:
+            # Clear existing routes and re-insert
+            self._db.execute('DELETE FROM route_stations')
+            self._db.execute('DELETE FROM routes')
+            for r in routes_data:
+                self._db.execute(
+                    'INSERT INTO routes (id, name, start_station, end_station, '
+                    'total_distance, prohibit_high_speed, prohibit_normal_speed) '
+                    'VALUES (?,?,?,?,?,?,?)',
+                    (r['id'], r['name'], r['start_station'], r['end_station'],
+                     r['total_distance'],
+                     1 if r.get('prohibit_high_speed') else 0,
+                     1 if r.get('prohibit_normal_speed') else 0))
+            for s in route_stations_data:
+                self._db.execute(
+                    'INSERT INTO route_stations '
+                    '(route_id, seq, station_name, line_name, cum_distance, is_junction) '
+                    'VALUES (?,?,?,?,?,?)',
+                    (s['route_id'], s['seq'], s['station_name'], s['line_name'],
+                     s['cum_distance'], 1 if s.get('is_junction') else 0))
+            self._db.commit()
+
         self._load_from_db(train_graph.name)
         self.refresh_train_path_table()
         self.update_graph_param_fields()
         self.path_selected_label.setText("")
         self.rail_track_table.setRowCount(0)
         self.canvas.update()
-        QMessageBox.information(self, "导入完成",
-            f"成功导入「{train_graph.name}」：{len(train_graph.train_paths)} 条线路")
+        msg = f"成功导入「{train_graph.name}」：{len(train_graph.train_paths)} 条线路"
+        if routes_data:
+            msg += f", {len(routes_data)} 条经由"
+        QMessageBox.information(self, "导入完成", msg)
 
     def on_export_json_clicked(self):
-        """Export current graph to a JSON file."""
+        """Export current graph + routes to a JSON file."""
         file_path, _ = QFileDialog.getSaveFileName(
             self, "导出 JSON 运行图",
             os.path.join(os.path.dirname(__file__), 'data',
                          f'{self.train_graph.name}.json'),
             "JSON 文件 (*.json);;所有文件 (*)")
-        if file_path:
-            save_train_graph_to_json(self.train_graph, file_path)
-            QMessageBox.information(self, "导出完成", f"已导出到 {file_path}")
+        if not file_path:
+            return
+        # Read routes from DB
+        route_rows = self._db.execute(
+            'SELECT id, name, start_station, end_station, total_distance, '
+            'prohibit_high_speed, prohibit_normal_speed '
+            'FROM routes ORDER BY id').fetchall()
+        routes = [
+            {
+                "id": r[0], "name": r[1],
+                "start_station": r[2], "end_station": r[3],
+                "total_distance": r[4],
+                "prohibit_high_speed": bool(r[5]),
+                "prohibit_normal_speed": bool(r[6]),
+            }
+            for r in route_rows
+        ]
+        # Read route_stations
+        st_rows = self._db.execute(
+            'SELECT route_id, seq, station_name, line_name, cum_distance, is_junction '
+            'FROM route_stations ORDER BY route_id, seq').fetchall()
+        route_stations = [
+            {
+                "route_id": r[0], "seq": r[1],
+                "station_name": r[2], "line_name": r[3],
+                "cum_distance": r[4], "is_junction": bool(r[5]),
+            }
+            for r in st_rows
+        ]
+        save_train_graph_to_json(self.train_graph, file_path,
+                                 routes=routes, route_stations=route_stations)
+        QMessageBox.information(self, "导出完成",
+            f"已导出到 {file_path}\n"
+            f"{len(self.train_graph.train_paths)} 条线路, {len(routes)} 条经由")
 
     # ── 图表参数编辑 ─────────────────────────────────────
 
