@@ -1,4 +1,4 @@
-"""Route finder: find paths between stations using kl_new.db topology."""
+"""Route finder: find paths between stations using kl.db topology."""
 import sqlite3, heapq
 from collections import defaultdict
 
@@ -15,7 +15,7 @@ class RouteFinder:
         ('京沪线', '沪宁高速线', '镇江'),
     }
 
-    def __init__(self, db_path="data/kl_new.db"):
+    def __init__(self, db_path="data/kl.db"):
         self.db = sqlite3.connect(db_path)
         self._build_line_stations()
         self._build_topology()
@@ -127,7 +127,7 @@ class RouteFinder:
 if __name__ == '__main__':
     import sys
     sys.stdout.reconfigure(encoding='utf-8')
-    rf = RouteFinder("data/kl_new.db")
+    rf = RouteFinder("data/kl.db")
     print("Station lines for 上海虹桥:", rf.get_station_lines("上海虹桥"))
     print("Station lines for 南京南:", rf.get_station_lines("南京南"))
     print("\nRoutes from 上海虹桥 to 南京南:")

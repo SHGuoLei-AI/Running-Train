@@ -17,8 +17,9 @@ except Exception:
     pass
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LLT_PATH = os.path.join(BASE_DIR, 'data', 'llt_schedule.db')
-RT_PATH = os.path.join(BASE_DIR, 'data', 'running_train.db')
+CC_PATH = os.path.join(BASE_DIR, 'data', 'cc.db')
+RG_PATH = os.path.join(BASE_DIR, 'data', 'rg.db')
+RT_PATH = os.path.join(BASE_DIR, 'data', 'rt.db')
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -35,7 +36,7 @@ class TrainDetailPopup(QDialog):
         self.setMinimumSize(550, 400)
 
         self._db = sqlite3.connect(RT_PATH)
-        self._llt = sqlite3.connect(LLT_PATH)
+        self._llt = sqlite3.connect(CC_PATH)
 
         self._setup_ui()
         self._load_data()
@@ -172,7 +173,8 @@ class RouteMatchTrainsDialog(QDialog):
         self.resize(1000, 600)
         self.setMinimumSize(800, 450)
 
-        self._db = sqlite3.connect(RT_PATH)
+        self._rg = sqlite3.connect(RG_PATH)
+        self._rt = sqlite3.connect(RT_PATH)
 
         self._setup_ui()
         self._load_routes()
@@ -242,19 +244,19 @@ class RouteMatchTrainsDialog(QDialog):
         layout.addWidget(btn_box)
 
     def _load_routes(self):
-        routes = self._db.execute(
-            '''SELECT r.id, r.name, r.start_station, r.end_station,
-                      r.total_distance,
-                      COUNT(DISTINCT trm.train_name) as cnt
-               FROM routes r
-               LEFT JOIN train_route_matches trm
-                 ON r.id = trm.route_id AND trm.is_matched = 1
-               GROUP BY r.id
-               ORDER BY r.id''').fetchall()
+        # Routes from rg.db, match counts from rt.db
+        routes = self._rg.execute(
+            'SELECT id, name, start_station, end_station, total_distance '
+            'FROM routes ORDER BY id').fetchall()
+        match_counts = {}
+        for row in self._rt.execute(
+            'SELECT route_id, COUNT(DISTINCT train_name) '
+            'FROM train_route_matches WHERE is_matched=1 GROUP BY route_id').fetchall():
+            match_counts[row[0]] = row[1]
 
-        self._routes = routes
-        self.route_table.setRowCount(len(routes))
-        for row, r in enumerate(routes):
+        self._routes = [(r[0], r[1], r[2], r[3], r[4], match_counts.get(r[0], 0)) for r in routes]
+        self.route_table.setRowCount(len(self._routes))
+        for row, r in enumerate(self._routes):
             rid, name, ss, es, dist, cnt = r
             for col, val in enumerate([
                 str(rid), name, ss, es, f"{dist:.0f}" if dist else '', str(cnt)
@@ -271,7 +273,7 @@ class RouteMatchTrainsDialog(QDialog):
             return
         route_id = self._routes[rows[0].row()][0]
 
-        trains = self._db.execute(
+        trains = self._rt.execute(
             '''SELECT trm.train_name,
                       rt.from_station || '-' || rt.to_station,
                       GROUP_CONCAT(
@@ -303,7 +305,8 @@ class RouteMatchTrainsDialog(QDialog):
             dlg.exec()
 
     def closeEvent(self, event):
-        self._db.close()
+        self._rg.close()
+        self._rt.close()
         super().closeEvent(event)
 
 
@@ -319,7 +322,8 @@ class TrainMatchRoutesDialog(QDialog):
         self.resize(950, 550)
         self.setMinimumSize(600, 400)
 
-        self._db = sqlite3.connect(RT_PATH)
+        self._rg = sqlite3.connect(RG_PATH)
+        self._rt = sqlite3.connect(RT_PATH)
 
         self._setup_ui()
         self._load_from_db()
@@ -371,7 +375,7 @@ class TrainMatchRoutesDialog(QDialog):
 
     def _load_from_db(self):
         """Read match results from train_route_matches table."""
-        records = self._db.execute(
+        records = self._rt.execute(
             '''SELECT trm.train_name,
                       rt.from_station || '-' || rt.to_station,
                       trm.seg_start_station, trm.seg_end_station,
@@ -446,12 +450,12 @@ class TrainMatchRoutesDialog(QDialog):
     def _on_show_in_graph_unmatched(self):
         """Show popup with unmatched segments whose both ends are in graph."""
         graph_stations = set()
-        for row in self._db.execute(
+        for row in self._rg.execute(
             'SELECT head_station, tail_station FROM railway_track').fetchall():
             graph_stations.add(row[0])
             graph_stations.add(row[1])
 
-        segs = self._db.execute(
+        segs = self._rt.execute(
             '''SELECT trm.train_name,
                       rt.from_station || '-' || rt.to_station,
                       trm.seg_start_station, trm.seg_end_station,
@@ -494,5 +498,6 @@ class TrainMatchRoutesDialog(QDialog):
             dlg.exec()
 
     def closeEvent(self, event):
-        self._db.close()
+        self._rg.close()
+        self._rt.close()
         super().closeEvent(event)

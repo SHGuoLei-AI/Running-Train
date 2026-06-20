@@ -17,15 +17,21 @@ def train_type_allowed(train_name, prohibit_high, prohibit_normal):
     return True
 
 
-def match_trains(llt_db, rt_db, progress=None):
+def match_trains(llt_db, rt_db, rg_db=None, progress=None):
     """Run matching engine. Returns (rows, all_db_records, stats).
 
     rows: list of [train_name, origin, segs_str]
     all_db_records: list of tuples for INSERT into train_route_matches
     stats: (full, partial, none)
     progress: optional callback(name, idx, total) called per train
+
+    llt_db: schedule DB (cc.db) — trains, train_stops
+    rt_db: region trains DB (rt.db) — region_trains, train_route_matches
+    rg_db: geometry DB (rg.db) — routes, route_stations (defaults to rt_db for backward compat)
     """
-    routes = rt_db.execute(
+    if rg_db is None:
+        rg_db = rt_db  # backward compat: when routes were in same DB
+    routes = rg_db.execute(
         'SELECT id,name,start_station,end_station,total_distance,prohibit_high_speed,prohibit_normal_speed '
         'FROM routes').fetchall()
 
@@ -33,7 +39,7 @@ def match_trains(llt_db, rt_db, progress=None):
     route_stations = {}
     for r in routes:
         rid = r[0]
-        sts = rt_db.execute(
+        sts = rg_db.execute(
             'SELECT station_name, cum_distance FROM route_stations WHERE route_id=? ORDER BY seq',
             (rid,)).fetchall()
         route_stations[rid] = sts
@@ -181,11 +187,12 @@ def match_trains(llt_db, rt_db, progress=None):
 
 if __name__ == '__main__':
     BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    db = sqlite3.connect(os.path.join(BASE, 'data', 'llt_schedule.db'))
-    rt = sqlite3.connect(os.path.join(BASE, 'data', 'running_train.db'))
+    db = sqlite3.connect(os.path.join(BASE, 'data', 'cc.db'))
+    rg = sqlite3.connect(os.path.join(BASE, 'data', 'rg.db'))
+    rt = sqlite3.connect(os.path.join(BASE, 'data', 'rt.db'))
 
     print(f'Matching...')
-    rows, all_db_records, stats = match_trains(db, rt)
+    rows, all_db_records, stats = match_trains(db, rt, rg)
     matched_all, matched_partial, unmatched_all = stats
 
     # Write CSV
@@ -195,7 +202,7 @@ if __name__ == '__main__':
         w.writerow(['车次', '区段', '经由匹配'])
         w.writerows(rows)
 
-    # Insert into DB
+    # Insert into DB (rt.db)
     rt.execute('DELETE FROM train_route_matches')
     for rec in all_db_records:
         rt.execute(
@@ -210,4 +217,5 @@ if __name__ == '__main__':
     print(f'CSV: {csv_path}')
     print(f'Full match: {matched_all}, Partial: {matched_partial}, No match: {unmatched_all}')
     db.close()
+    rg.close()
     rt.close()

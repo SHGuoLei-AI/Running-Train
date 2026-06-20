@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p apk_extracted)",
+      "Bash(unzip -o \"lulutong0617.apk\" -d apk_extracted)",
+      "Bash(xxd -l 256 \"zsahnl.dat\")",
+      "Bash(xxd -l 256 \"zlsioh.dat\")",
+      "Bash(xxd -l 256 \"6.4.3\")",
+      "Bash(xxd -l 256 \"fusv1.jar\")",
+      "Bash(xxd -l 1000 AndroidManifest.xml)",
+      "Bash(unzip -o assets/fusv1.jar -d fusv1_extracted)",
+      "Bash(java -version)",
+      "Bash(python3 search_key.py)",
+      "Bash(python \"D:/work/running_train/tools/llt/search_key.py\")",
+      "Bash(python \"D:/work/running_train/tools/llt/search_sm4.py\")",
+      "Bash(unzip -l \"assets/6.4.3\")",
+      "Bash(export MSYS_NO_PATHCONV=1)",
+      "Bash(frida-ps -Uai)",
+      "Bash(frida -U -p 3578 -l \"D:/work/running_train/tools/llt/frida_hook.js\")",
+      "Bash(timeout 60 frida -U -f com.lltskb.lltskb -l \"D:/work/running_train/tools/llt/frida_explore.js\")",
+      "Bash(timeout 60 frida -U -f com.lltskb.lltskb -l \"D:/work/running_train/tools/llt/frida_simple.js\")",
+      "Bash(\"C:/Program Files/Microsoft/jdk-17.0.19.10-hotspot/bin/java\" -jar \"C:/platform-tools/apktool.jar\" d -r \"D:/work/running_train/tools/llt/lulutong0617.apk\" -o \"D:/work/running_train/tools/llt/apktool_nr\" -f)",
+      "Bash(\"C:/Program Files/Microsoft/jdk-17.0.19.10-hotspot/bin/java\" -jar \"C:/platform-tools/apktool.jar\" b -r \"D:/work/running_train/tools/llt/apktool_nr\" -o \"D:/work/running_train/tools/llt/patched/test_nr.apk\")",
+      "Bash(\"C:/Program Files/Microsoft/jdk-17.0.19.10-hotspot/bin/jarsigner\" -sigalg SHA256withRSA -digestalg SHA-256 -keystore \"C:/platform-tools/debug.keystore\" -storepass android -keypass android \"D:/work/running_train/tools/llt/patched/test_nr.apk\" androiddebugkey)",
+      "Bash(export ANDROID_SERIAL=\"\")",
+      "Bash(./adb devices *)",
+      "Bash(cat > *)",
+      "Bash(find \"/tmp\" -name \"*.objection.apk\" -o -name \"*patched*\")",
+      "Bash(ls -la \"/tmp\")",
+      "Bash(find \"C:/Users/lguo\" -path \"*/objection*\" -name \"*.apk\" 2>/dev/null | head -10 && find \"C:/Users/lguo/.objection\" -type d 2>/dev/null && ls -la \"C:/Users/lguo/AppData/Local/Temp/tmp\"* 2>/dev/null | head -5)",
+      "Read(//c/Users/lguo/**)",
+      "Bash(\"C:/Program Files/Microsoft/jdk-17.0.19.10-hotspot/bin/java\" -jar \"C:/platform-tools/apktool.jar\" b --use-aapt2 \"D:/work/running_train/tools/llt/apktool_nr\" -o \"D:/work/running_train/tools/llt/patched/test_aapt2.apk\")",
+      "Bash(\"C:/Program Files/Microsoft/jdk-17.0.19.10-hotspot/bin/jarsigner\" -sigalg SHA256withRSA -digestalg SHA-256 -keystore \"C:/platform-tools/debug.keystore\" -storepass android -keypass android \"D:/work/running_train/tools/llt/patched/test_aapt2.apk\" androiddebugkey)",
+      "Bash(find \"C:/Program Files/Android\" -name \"apksigner.jar\" 2>/dev/null; find \"C:/Users/lguo/Downloads\" -name \"apksigner.jar\" 2>/dev/null; find \"C:/Users/lguo/Desktop\" -name \"apksigner.jar\" 2>/dev/null; find \"D:/\" -name \"apksigner.jar\" -maxdepth 4 2>/dev/null | head -5)",
+      "Read(//d//**)",
+      "Bash(python \"D:/work/running_train/tools/llt/compare_apks.py\")",
+      "Bash(\"C:/Program Files/Microsoft/jdk-17.0.19.10-hotspot/bin/java\" -jar \"C:/platform-tools/apktool.jar\" d \"D:/work/running_train/tools/llt/lulutong0617.apk\" -o \"D:/work/running_train/tools/llt/apktool_full\" -f)",
+      "Bash(\"C:/Program Files/Microsoft/jdk-17.0.19.10-hotspot/bin/java\" -jar \"C:/platform-tools/apktool.jar\" b --use-aapt2 \"D:/work/running_train/tools/llt/apktool_full\" -o \"D:/work/running_train/tools/llt/patched/test_full_aapt2.apk\")",
+      "Bash(python3 -c ' *)",
+      "Bash(\"C:/Program Files/Microsoft/jdk-17.0.19.10-hotspot/bin/jarsigner\" -sigalg SHA256withRSA -digestalg SHA-256 -keystore \"C:/platform-tools/debug.keystore\" -storepass android -keypass android \"D:/work/running_train/tools/llt/patched/test_full_aapt2.apk\" androiddebugkey)",
+      "Bash(\"C:/platform-tools/adb\" -s 127.0.0.1:7555 shell ls //data/data/com.lltskb.lltskb/)"
+    ],
+    "additionalDirectories": [
+      "C:\\platform-tools"
+    ]
+  }
+}

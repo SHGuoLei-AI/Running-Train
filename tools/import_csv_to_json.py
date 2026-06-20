@@ -220,7 +220,7 @@ def load_existing_graph(graph_path):
 
 
 def write_graph_db(db_path, graph_payload, preserve_metadata=None):
-    """Write train graph to running_train.db."""
+    """Write train graph to rg.db."""
     if preserve_metadata is None:
         preserve_metadata = {}
     db = sqlite3.connect(db_path)
@@ -282,7 +282,7 @@ def main():
     parser.add_argument('--line-csv', default=os.path.join(os.path.dirname(__file__), '线路.csv'), help='线路 CSV 文件路径')
     parser.add_argument('--section-csv', default=os.path.join(os.path.dirname(__file__), '区间.csv'), help='区间 CSV 文件路径')
     parser.add_argument('--output-json', default=None, help='输出 JSON 文件路径（可选，默认写入 DB）')
-    parser.add_argument('--db', default=os.path.join(os.path.dirname(__file__), '..', 'data', 'running_train.db'), help='输出 DB 路径')
+    parser.add_argument('--db', default=os.path.join(os.path.dirname(__file__), '..', 'data', 'rg.db'), help='输出 DB 路径')
     args = parser.parse_args()
 
     line_rows, line_headers, line_enc = load_csv_rows(args.line_csv)

@@ -22,7 +22,7 @@ class MainWindow(QMainWindow):
         self._current_graph_name = None
 
         # DB connection (persistent, shared across app lifetime)
-        db_path = os.path.join(os.path.dirname(__file__), 'data', 'running_train.db')
+        db_path = os.path.join(os.path.dirname(__file__), 'data', 'rg.db')
         self._db = sqlite3.connect(db_path)
 
         # 手动创建主窗口部件

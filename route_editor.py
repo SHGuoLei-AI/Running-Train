@@ -12,8 +12,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'running_train.db')
-KL_PATH = os.path.join(os.path.dirname(__file__), 'data', 'kl_new.db')
+DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'rg.db')
+RT_PATH = os.path.join(os.path.dirname(__file__), 'data', 'rt.db')
+KL_PATH = os.path.join(os.path.dirname(__file__), 'data', 'kl.db')
 
 
 class RouteEditorDialog(QDialog):
@@ -35,7 +36,7 @@ class RouteEditorDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # --- Top label ---
-        layout.addWidget(QLabel("经由列表（来源: running_train.db）"))
+        layout.addWidget(QLabel("经由列表（来源: rg.db）"))
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -385,30 +386,31 @@ class RouteEditorDialog(QDialog):
 
         log("开始匹配...")
 
-        llt_path = os.path.join(os.path.dirname(__file__), 'data', 'llt_schedule.db')
+        llt_path = os.path.join(os.path.dirname(__file__), 'data', 'cc.db')
         llt_db = sqlite3.connect(llt_path)
+        rt_db = sqlite3.connect(RT_PATH)
 
         try:
             def progress(name, idx, total):
                 if idx % 30 == 0:
                     log(f"  处理中: {idx}/{total} — {name}")
 
-            rows, all_db_records, stats = match_trains(llt_db, self._db, progress=progress)
+            rows, all_db_records, stats = match_trains(llt_db, rt_db, self._db, progress=progress)
             matched_all, matched_partial, unmatched_all = stats
 
             log(f"\n匹配完成，正在写入数据库...")
 
-            # Replace match table
-            self._db.execute('DELETE FROM train_route_matches')
+            # Replace match table (in rt.db)
+            rt_db.execute('DELETE FROM train_route_matches')
             for rec in all_db_records:
-                self._db.execute(
+                rt_db.execute(
                     'INSERT INTO train_route_matches '
                     '(train_name, seg_start_seq, seg_end_seq, '
                     ' seg_start_station, seg_end_station, seg_distance_km, '
                     ' route_id, route_name, is_reverse, match_type, is_matched) '
                     'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                     rec)
-            self._db.commit()
+            rt_db.commit()
 
             log("数据库已更新。")
 
@@ -499,6 +501,7 @@ class RouteEditorDialog(QDialog):
 
         finally:
             llt_db.close()
+            rt_db.close()
 
     # ── Add new route ────────────────────────────────────
 
