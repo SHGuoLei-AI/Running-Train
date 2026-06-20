@@ -88,6 +88,19 @@ SELECT DISTINCT line_name FROM line_stations WHERE line_name LIKE '%联络%'
 | 0km特例 | 1（Y字头） |
 | 图内未匹配 | 15 |
 
+### 模拟模块
+
+| 指标 | 值 |
+|------|------|
+| SegmentIndex 站对 | 352 |
+| 加载车次 | 3,005 |
+| BFS 路径覆盖 | 10,951/34,238 段 (32.0%) |
+| 午间可见 | 277 趟 |
+| 高峰可见 | 294 趟 (16:00) |
+| 每帧计算 | ~8.6ms |
+
+模拟算法见 [[simulation-segment-matching-v1]]。
+
 ## 六、数据架构
 
 ```
@@ -115,3 +128,6 @@ rg.db 维护：`meta.kl_version` ↔ `kl.db.meta.version`
 | `tools/check_kl_route51.py` | 查询kl线路数据辅助排查 |
 | `route_finder.py` | 自动BFS搜索两站间路径（辅助工具） |
 | `tools/migrate_json_to_db.py` | JSON→DB 迁移（已执行） |
+| `simulation.py` | 模拟引擎：SegmentIndex + TrainPositioner + SimulationClock |
+| `sim_controls.py` | 模拟控制面板 |
+| `canvas.py` | 画布：Pass 1(线路) + Pass 2(站名) + Pass 3(列车) |

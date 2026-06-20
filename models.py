@@ -59,7 +59,7 @@ class RailwayPath:
 class RailwayTrack:
     """铁路区间类"""
     def __init__(self, length, deflection, head_station="", tail_station="",
-                 draw_head=True, draw_tail=False, start_point=(0, 0), **kwargs):
+                 draw_head=True, draw_tail=False, start_point=(0, 0), label_flip=0, **kwargs):
         self.length = length
         self.deflection = deflection
         self.head_station = head_station
@@ -68,6 +68,7 @@ class RailwayTrack:
         self.draw_tail = draw_tail
         self.start_point = start_point
         self.parent_angle = 0.0
+        self.label_flip = label_flip
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -130,6 +131,7 @@ def save_train_graph_to_json(train_graph, file_path, routes=None, route_stations
                             "deflection": t.deflection,
                             "draw_start": t.draw_head,
                             "draw_end": t.draw_tail,
+                            "label_flip": getattr(t, 'label_flip', 0),
                         }
                         for t in p.tracks
                     ]
@@ -189,15 +191,16 @@ def load_train_graph_from_db(db, graph_name=None):
 
             tracks = conn.execute(
                 'SELECT head_station, tail_station, length, deflection, '
-                'draw_head, draw_tail '
+                'draw_head, draw_tail, label_flip '
                 'FROM railway_track WHERE path_id=? ORDER BY seq',
                 (pid,)).fetchall()
 
-            for hs, ts, length, deflection, dh, dt in tracks:
+            for hs, ts, length, deflection, dh, dt, lf in tracks:
                 path.add_track(RailwayTrack(
                     length=length, deflection=deflection or 0,
                     head_station=hs or '', tail_station=ts or '',
-                    draw_head=bool(dh), draw_tail=bool(dt)))
+                    draw_head=bool(dh), draw_tail=bool(dt),
+                    label_flip=int(lf or 0)))
 
             train_graph.add_train_path(path)
 
@@ -243,13 +246,14 @@ def save_train_graph_to_db(train_graph, db):
                 conn.execute(
                     'INSERT INTO railway_track '
                     '(path_id, seq, head_station, tail_station, length, deflection, '
-                    'draw_head, draw_tail) '
-                    'VALUES (?,?,?,?,?,?,?,?)',
+                    'draw_head, draw_tail, label_flip) '
+                    'VALUES (?,?,?,?,?,?,?,?,?)',
                     (path_db_id, seq,
                      track.head_station, track.tail_station,
                      track.length, track.deflection,
                      1 if track.draw_head else 0,
-                     1 if track.draw_tail else 0))
+                     1 if track.draw_tail else 0,
+                     getattr(track, 'label_flip', 0)))
 
         conn.commit()
     except Exception:

@@ -3,6 +3,8 @@ from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Qt, QRect
 from PySide6.QtGui import QPainter, QPen, QColor
 
+from simulation import TrainRenderer
+
 TRACK_WIDTH = 10
 UP_LINE_COLOR = QColor(255, 200, 200)
 DOWN_LINE_COLOR = QColor(200, 255, 200)
@@ -13,7 +15,13 @@ class DrawingCanvas(QWidget):
     def __init__(self, train_graph, parent=None):
         super().__init__(parent)
         self.train_graph = train_graph
+        self._train_positions: list = []  # list of TrainPosition
         self._update_size()
+
+    def set_train_positions(self, positions: list):
+        """设置要绘制的列车位置列表，触发重绘"""
+        self._train_positions = positions
+        self.update()
 
     def _update_size(self):
         scale = self.train_graph.scale
@@ -92,3 +100,7 @@ class DrawingCanvas(QWidget):
                 painter.fillRect(text_rect, QColor(255, 255, 255))
                 painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, track.tail_station)
                 painter.restore()
+
+        # 第3遍：画列车（圆点 + 车次号，覆盖在线路上方）
+        for pos in self._train_positions:
+            TrainRenderer.draw(painter, pos)

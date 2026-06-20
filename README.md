@@ -91,10 +91,12 @@ data/
 ```text
 running_train/
 ├── main.py                  # 入口
-├── main_window.py           # 主窗口（UI + 交互 + 菜单 + 备份）
+├── main_window.py           # 主窗口（UI + 交互 + 菜单 + 备份 + 模拟集成）
 ├── models.py                # 数据模型 + DB I/O + JSON I/O
-├── canvas.py                # 画布（轨道绘制）
+├── canvas.py                # 画布（轨道绘制 + 列车绘制）
 ├── delegates.py             # 单选委托（空心/实心圆）
+├── simulation.py            # 模拟引擎（SegmentIndex + TrainPositioner + Clock）
+├── sim_controls.py          # 模拟控制面板
 ├── route_editor.py          # 经由编辑对话框
 ├── route_finder.py          # BFS 路径搜索
 ├── train_match_dialogs.py   # 匹配查看对话框（3 类）
@@ -116,8 +118,34 @@ running_train/
     ├── add_route*.py        # 新增经由
     ├── fix_route*.py        # 修正经由
     ├── check_route51.py     # 排查经由偏差
+    ├── simulation.py            # 模拟引擎：SegmentIndex + TrainPositioner + SimulationClock
+    ├── sim_controls.py          # 模拟控制面板
     └── ...
 ```
+
+## 模拟模块
+
+21个文件的新增模块，实现列车在运行图上实时动态模拟：
+
+| 特性 | 说明 |
+|------|------|
+| 时钟 | QTimer 30fps，0-1439 分钟循环，启动时取系统当前时间 |
+| 速度 | ½× / 1× / 2× / 4× / 8× 五档 |
+| 定位 | BFS 站对→track 多跳路径 + 时间比例线性插值 |
+| 上下行 | 奇数车次=上行(+10px)，偶数车次=下行(-10px) |
+| 车次号 | 上行左下、下行右上；track 可设 `label_flip` 反转 |
+| 控制面板 | 左侧 100px，时钟 + 24 整点按钮(6行×4列) + 开始/暂停 + 速度 |
+
+### 当前覆盖率
+
+| 指标 | 值 |
+|------|------|
+| 总列车段 | 34,238 |
+| BFS 命中 | 10,951 (32.0%) |
+| 午间可见 | 277 趟 |
+| 高峰可见 | 294 趟 (16:00) |
+
+> 68% 未命中主要因列车站名不在图内（1,293 列车站中仅 107 个在图内）。下一步通过 route_stations 中间层改进。
 
 ## 安装与运行
 

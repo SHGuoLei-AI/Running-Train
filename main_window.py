@@ -15,6 +15,8 @@ from models import (TrainGraph, RailwayPath, RailwayTrack,
                     list_graphs_in_db)
 from canvas import DrawingCanvas
 from delegates import RadioDelegate
+from simulation import SegmentIndex, TrainPositioner, SimulationClock
+from sim_controls import SimulationControlPanel
 
 
 class MainWindow(QMainWindow):
@@ -24,6 +26,11 @@ class MainWindow(QMainWindow):
         self._refreshing = False
         self._current_graph_name = None
 
+        # 模拟状态
+        self._sim_clock: SimulationClock | None = None
+        self._sim_panel: SimulationControlPanel | None = None
+        self._positioner: TrainPositioner | None = None
+
         # DB connection (persistent, shared across app lifetime)
         db_path = os.path.join(os.path.dirname(__file__), 'data', 'rg.db')
         self._db = sqlite3.connect(db_path)
@@ -32,8 +39,10 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         central_layout = QVBoxLayout(central)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(2)
         self.canvas_widget = QWidget()
-        central_layout.addWidget(self.canvas_widget)
+        central_layout.addWidget(self.canvas_widget, stretch=1)
 
         # 菜单栏
         self.menu_file = self.menuBar().addMenu("文件(&F)")
@@ -92,6 +101,8 @@ class MainWindow(QMainWindow):
         self.graph_scale_field.editingFinished.connect(self.on_graph_params_changed)
 
         self.graph_param_layout = QHBoxLayout()
+        self.graph_param_layout.setContentsMargins(0, 0, 0, 0)
+        self.graph_param_layout.setSpacing(2)
         name_label = QLabel("名称:"); name_label.setStyleSheet("border: none;")
         len_label = QLabel("长:"); len_label.setStyleSheet("border: none;")
         wid_label = QLabel("宽:"); wid_label.setStyleSheet("border: none;")
@@ -121,6 +132,7 @@ class MainWindow(QMainWindow):
         self.path_selected_label.setStyleSheet("font-weight: bold; border: none;")
 
         self.path_btn_layout = QHBoxLayout()
+        self.path_btn_layout.setContentsMargins(0, 0, 0, 0)
         self.add_path_button = QPushButton("  新增线路  ")
         self.add_path_button.clicked.connect(self.on_add_path_clicked)
         self.delete_path_button = QPushButton("  删除线路  ")
@@ -137,10 +149,10 @@ class MainWindow(QMainWindow):
         self.path_btn_layout.addWidget(self.delete_path_button)
 
         self.rail_track_table = QTableWidget()
-        self.rail_track_table.setColumnCount(6)
+        self.rail_track_table.setColumnCount(7)
         self.rail_track_table.setHorizontalHeaderLabels(
-            ["画", "头站", "画", "尾站", "长度", "偏转"])
-        widths = [20, 80, 20, 80, 40, 30]
+            ["画", "头站", "画", "尾站", "长度", "偏转", "反号"])
+        widths = [20, 80, 20, 80, 40, 30, 30]
         for i, w in enumerate(widths):
             self.rail_track_table.setColumnWidth(i, w)
         self.rail_track_table.verticalHeader().setFixedWidth(24)
@@ -153,6 +165,7 @@ class MainWindow(QMainWindow):
         self.rail_track_table.setItemDelegateForColumn(2, self._radio_delegate)
 
         self.track_btn_layout = QHBoxLayout()
+        self.track_btn_layout.setContentsMargins(0, 0, 0, 0)
         self.insert_track_button = QPushButton("  插入区间  ")
         self.insert_track_button.clicked.connect(self.on_insert_track_clicked)
         self.add_track_button = QPushButton("  新增区间  ")
@@ -166,6 +179,8 @@ class MainWindow(QMainWindow):
 
         self.data_panel = QWidget()
         data_layout = QVBoxLayout(self.data_panel)
+        data_layout.setContentsMargins(2, 2, 2, 2)
+        data_layout.setSpacing(2)
         data_layout.addLayout(self.graph_param_layout)
         data_layout.addWidget(self.train_path_table, stretch=1)
         data_layout.addLayout(self.path_btn_layout)
@@ -183,6 +198,7 @@ class MainWindow(QMainWindow):
         self.toggle_panel_btn.setToolTip("显示/隐藏数据面板")
         self.toggle_panel_btn.clicked.connect(self.on_toggle_panel_clicked)
         scale_btn_row = QHBoxLayout()
+        scale_btn_row.setContentsMargins(0, 0, 0, 0)
         scale_btn_row.addStretch()
         scale_btn_row.addWidget(self.scale_plus_btn)
         scale_btn_row.addWidget(self.scale_reset_btn)
@@ -190,10 +206,13 @@ class MainWindow(QMainWindow):
         scale_btn_row.addWidget(self.toggle_panel_btn)
 
         self.scroll_area = QScrollArea()
+        self.scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
         self.scroll_area.setWidgetResizable(False)
         self.scroll_area.setWidget(self.canvas)
 
         left_panel = QVBoxLayout()
+        left_panel.setContentsMargins(0, 0, 0, 0)
+        left_panel.setSpacing(2)
         left_panel.addWidget(self.scroll_area, stretch=1)
         left_panel.addLayout(scale_btn_row)
 
@@ -209,13 +228,26 @@ class MainWindow(QMainWindow):
         self._splitter.setStretchFactor(1, 0)
 
         canvas_layout = self.canvas_widget.layout() or QHBoxLayout(self.canvas_widget)
+        canvas_layout.setContentsMargins(0, 0, 0, 0)
+        canvas_layout.setSpacing(0)
         while canvas_layout.count():
             canvas_layout.takeAt(0)
-        canvas_layout.addWidget(self._splitter)
+
+        # 模拟控制面板（左侧，100px 宽，启动即显示）
+        self._sim_panel = SimulationControlPanel()
+        canvas_layout.addWidget(self._sim_panel)
+
+        canvas_layout.addWidget(self._splitter, stretch=1)
+
+        # 模拟时钟
+        self._sim_clock = SimulationClock(self)
 
         self.refresh_train_path_table()
         self.update_graph_param_fields()
         self.connect_signals()
+
+        # 启动模拟（以系统当前时间）
+        self._init_simulation()
 
     # ── 菜单 & 信号 ──────────────────────────────────────
 
@@ -230,6 +262,15 @@ class MainWindow(QMainWindow):
         self.action_update_kl.triggered.connect(self.on_update_kl_clicked)
         self.action_auto_backup.triggered.connect(self.on_auto_backup_toggled)
         self.action_delete_backups.triggered.connect(self.on_delete_backups_clicked)
+
+        # 控制面板 → 时钟
+        self._sim_panel.start_clicked.connect(self._sim_clock.start)
+        self._sim_panel.pause_clicked.connect(self._sim_clock.pause)
+        self._sim_panel.hour_clicked.connect(self._sim_clock.jump_to)
+        self._sim_panel.speed_changed.connect(self._sim_clock.set_speed)
+
+        # 时钟 → UI
+        self._sim_clock.time_changed.connect(self._on_sim_tick)
 
     def on_update_schedule_clicked(self):
         QMessageBox.information(self, "更新时刻表",
@@ -709,6 +750,11 @@ class MainWindow(QMainWindow):
         self.rail_track_table.setItem(row, 3, QTableWidgetItem(track.tail_station))
         self.rail_track_table.setItem(row, 4, QTableWidgetItem(str(int(track.length))))
         self.rail_track_table.setItem(row, 5, QTableWidgetItem(str(int(track.deflection))))
+        chklf = QTableWidgetItem()
+        chklf.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        chklf.setData(Qt.ItemDataRole.CheckStateRole,
+                      Qt.CheckState.Checked if getattr(track, 'label_flip', 0) else Qt.CheckState.Unchecked)
+        self.rail_track_table.setItem(row, 6, chklf)
 
     def on_track_item_changed(self, item):
         if self._refreshing:
@@ -735,6 +781,11 @@ class MainWindow(QMainWindow):
                 track.length = int(float(item.text().strip()))
             elif col == 5:
                 track.deflection = int(float(item.text().strip()))
+            elif col == 6:
+                track.label_flip = 1 if (item.data(Qt.ItemDataRole.CheckStateRole) == Qt.CheckState.Checked) else 0
+                # 立即重建模拟 + 保存到 DB
+                self._refresh_simulation()
+                save_train_graph_to_db(self.train_graph, self._db)
 
             if col in (4, 5):
                 for i in range(row + 1, len(path.tracks)):
@@ -746,7 +797,7 @@ class MainWindow(QMainWindow):
         self.canvas.update()
 
     def on_track_table_cell_clicked(self, row, col):
-        if col not in (0, 2):
+        if col not in (0, 2, 6):
             return
         item = self.rail_track_table.item(row, col)
         if not item:
@@ -817,6 +868,41 @@ class MainWindow(QMainWindow):
         self.rail_track_table.blockSignals(False)
         self.refresh_train_path_table()
         self.canvas.update()
+
+    # ── 模拟 ──────────────────────────────────────────
+
+    def _init_simulation(self):
+        """初始化模拟：构建索引、加载车次、以当前时间启动"""
+        seg_index = SegmentIndex.from_graph(self.train_graph)
+        rt_path = os.path.join(os.path.dirname(__file__), 'data', 'rt.db')
+        self._positioner = TrainPositioner(rt_path, seg_index)
+
+        # 取系统当前时间
+        now = datetime.now()
+        minute = float(now.hour * 60 + now.minute)
+        self._sim_clock.current_minute = minute
+        self._sim_panel.update_clock(minute)
+
+        # 启动时钟
+        self._sim_clock.start()
+
+    def _refresh_simulation(self):
+        """重建模拟索引（保留当前时间，用于 track 属性变更后刷新）"""
+        if not self._positioner:
+            return
+        seg_index = SegmentIndex.from_graph(self.train_graph)
+        rt_path = os.path.join(os.path.dirname(__file__), 'data', 'rt.db')
+        self._positioner = TrainPositioner(rt_path, seg_index)
+        # 立即用当前时钟时间刷新列车位置
+        self._on_sim_tick(self._sim_clock.current_minute)
+
+    def _on_sim_tick(self, minute: float):
+        """时钟每帧回调：更新列车位置和面板时钟"""
+        if self._positioner:
+            positions = self._positioner.visible_trains(minute)
+            self.canvas.set_train_positions(positions)
+        if self._sim_panel:
+            self._sim_panel.update_clock(minute)
 
     def closeEvent(self, event):
         if hasattr(self, '_db') and self._db:
