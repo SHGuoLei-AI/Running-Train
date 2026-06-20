@@ -4,9 +4,10 @@
 
 | 数据 | 来源 | 角色 |
 |------|------|------|
-| `kl_new.db` | 客里表 | **唯一里程来源**，不可修改 |
-| `llt_schedule.db` | APK提取 | 时刻表数据，不可修改 |
-| `running_train.db` | 项目库 | 经由表、TrainGraph、RailwayTrack |
+| `kl.db` | 客里表 | **唯一里程来源**，不可修改 |
+| `cc.db` | APK提取 | 时刻表数据，不可修改 |
+| `rg.db` | 项目库 | 几何结构：经由表、TrainGraph、RailwayTrack |
+| `rt.db` | 项目库 | 图上车次：region_trains、train_route_matches |
 
 **三条铁律：**
 1. 时刻表数据不可修改
@@ -43,7 +44,7 @@ SELECT DISTINCT line_name FROM line_stations WHERE line_name LIKE '%联络%'
 - **不要**用圆整估算值（30、40等），用kl的精确值（39、14、53等）
 
 ### 5. 验证
-与时刻表车次距离对比，偏差应 ≤3km。若所有车次一致偏差同一值 → 拓扑路径有误（走了不同线/联络线）。
+与时刻表车次距离对比，偏差必须 = 0km（精确匹配）。若所有车次一致偏差同一值 → 拓扑路径有误（走了不同线/联络线）。
 
 ## 三、匹配引擎逻辑
 
@@ -54,10 +55,10 @@ SELECT DISTINCT line_name FROM line_stations WHERE line_name LIKE '%联络%'
 
 | 匹配类型 | 条件 |
 |----------|------|
-| 正向全匹配 | 起点=经由起点，终点=经由终点，距离差≤3km |
+| 正向全匹配 | 起点=经由起点，终点=经由终点，距离差=0 |
 | 反向全匹配 | 同上，方向相反 |
-| 部分匹配（端点） | 一端=经由端点，另一端在经由上，距离差≤3km |
-| 部分匹配（中间段） | 两端都在经由中间，距离差≤3km |
+| 部分匹配（端点） | 一端=经由端点，另一端在经由上，距离差=0 |
+| 部分匹配（中间段） | 两端都在经由中间，距离差=0 |
 
 ### 0km降级匹配
 当车次所有停站距离全为0（旅游列车等）时，降级为站名连续序列匹配：
@@ -71,26 +72,46 @@ SELECT DISTINCT line_name FROM line_stations WHERE line_name LIKE '%联络%'
 3. 逐一对比每个区间，定位里程偏差段
 4. 检查是否走了联络线而非站内换乘
 5. 修正经由，重新匹配
-6. 反复直到该OD所有车次偏差 ≤3km
+6. 反复直到该OD所有车次偏差 = 0km
 
 ## 五、当前状态
 
 | 指标 | 数量 |
 |------|------|
-| 经由总数 | 55条 |
+| 经由总数 | 51条 |
 | 图内站 | 152个（railway_track） |
-| 全匹配车次 | 425 |
-| 部分匹配车次 | 2326 |
-| 图内≥2站零匹配 | 0（5个Y字头0km除外） |
-| 全部图外零匹配 | 254 |
+| 图内线路 | 28条 |
+| 全匹配车次 | 438 |
+| 部分匹配车次 | 2297 |
+| 零匹配车次 | 270 |
+| 图外车次 | 254 |
+| 0km特例 | 1（Y字头） |
+| 图内未匹配 | 15 |
 
-## 六、相关脚本
+## 六、数据架构
+
+```
+data/
+├── kl.db    # 客里表 — 756线, 6654站 (jprailfan)
+├── cc.db    # 时刻表 — 17168车次, 150841停站 (路路通)
+├── rg.db    # 几何结构 — 1图, 28线路, 51经由, 786站序
+├── rt.db    # 图上车次 — 3005车次, 37243停站, 6398匹配记录
+├── backup/  # 自动备份 (gitignore)
+└── 数据结构.md
+```
+
+rg.db 维护：`meta.kl_version` ↔ `kl.db.meta.version`
+
+## 七、相关脚本
 
 | 脚本 | 用途 |
 |------|------|
-| `tools/match_trains.py` | 匹配引擎，输出 `train_route_match_v2.csv` |
+| `tools/match_trains.py` | 匹配引擎，输出CSV + 写入 rt.db |
+| `tools/migrate_to_new_dbs.py` | 4-DB 迁移脚本 |
+| `tools/parse_llt_apk.py` | APK 时刻表解析 |
 | `tools/add_route*.py` | 新增单条经由 |
 | `tools/fix_route*.py` | 修正已有经由距离 |
 | `tools/check_route51.py` | 检查指定经由的距离偏差 |
 | `tools/check_kl_route51.py` | 查询kl线路数据辅助排查 |
 | `route_finder.py` | 自动BFS搜索两站间路径（辅助工具） |
+| `tools/migrate_json_to_db.py` | JSON→DB 迁移（已执行） |
