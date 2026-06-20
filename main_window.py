@@ -35,6 +35,7 @@ class MainWindow(QMainWindow):
         # 菜单栏
         self.menu_file = self.menuBar().addMenu("文件(&F)")
         self.menu_routes = self.menuBar().addMenu("经由(&R)")
+        self.menu_tools = self.menuBar().addMenu("工具(&T)")
         self.menu_help = self.menuBar().addMenu("帮助(&H)")
         self.action_exit = self.menu_file.addAction("退出")
         self.action_route_editor = self.menu_routes.addAction("经由维护...")
@@ -43,6 +44,8 @@ class MainWindow(QMainWindow):
         self.menu_routes.addSeparator()
         self.action_route_matched_trains = self.menu_routes.addAction("经由匹配的车次")
         self.action_train_matched_routes = self.menu_routes.addAction("车次匹配的经由")
+        self.action_update_schedule = self.menu_tools.addAction("更新时刻表...")
+        self.action_update_kl = self.menu_tools.addAction("更新里程表...")
         self.action_about = self.menu_help.addAction("关于")
 
         # 文件菜单：打开、保存、另存为、导入/导出 JSON
@@ -210,6 +213,19 @@ class MainWindow(QMainWindow):
         self.action_route_match.triggered.connect(self.on_route_match_clicked)
         self.action_route_matched_trains.triggered.connect(self.on_route_matched_trains_clicked)
         self.action_train_matched_routes.triggered.connect(self.on_train_matched_routes_clicked)
+        self.action_update_schedule.triggered.connect(self.on_update_schedule_clicked)
+        self.action_update_kl.triggered.connect(self.on_update_kl_clicked)
+
+    def on_update_schedule_clicked(self):
+        QMessageBox.information(self, "更新时刻表",
+            "从路路通 APK 提取时刻表数据写入 cc.db。\n\n"
+            "雏形脚本: tools/parse_llt_apk.py\n"
+            "待完善：集成到 GUI，显示进度，自动备份旧版本。")
+
+    def on_update_kl_clicked(self):
+        QMessageBox.information(self, "更新里程表",
+            "从 jprailfan.com/tools/stat/ 获取最新客里表数据写入 kl.db。\n\n"
+            "待完善：实现下载解析逻辑。")
 
     def on_about_clicked(self):
         QMessageBox.about(self, "关于", "欢迎使用动态模拟火车运行图")
