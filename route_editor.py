@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QSplitter, QTableWidget,
     QTableWidgetItem, QPushButton, QLabel, QMessageBox, QDialogButtonBox,
     QListWidget, QListWidgetItem, QAbstractItemView, QWidget,
-    QTextEdit, QApplication,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -360,148 +359,10 @@ class RouteEditorDialog(QDialog):
 
     def _on_match_trains(self):
         """Run matching with progress dialog and detailed summary."""
-        from tools.match_trains import match_trains
+        from tools.match_trains import run_matching_with_progress
 
-        # Build progress dialog immediately
-        dlg = QDialog(self)
-        dlg.setWindowTitle("经由匹配进度")
-        dlg.resize(520, 480)
-        dlg_layout = QVBoxLayout(dlg)
-
-        text_edit = QTextEdit()
-        text_edit.setReadOnly(True)
-        dlg_layout.addWidget(text_edit)
-
-        close_btn = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        close_btn.rejected.connect(dlg.close)
-        close_btn.button(QDialogButtonBox.StandardButton.Close).setEnabled(False)
-        dlg_layout.addWidget(close_btn)
-
-        dlg.show()
-        QApplication.processEvents()
-
-        def log(msg):
-            text_edit.append(msg)
-            QApplication.processEvents()
-
-        log("开始匹配...")
-
-        llt_path = os.path.join(os.path.dirname(__file__), 'data', 'cc.db')
-        llt_db = sqlite3.connect(llt_path)
-        rt_db = sqlite3.connect(RT_PATH)
-
-        try:
-            def progress(name, idx, total):
-                if idx % 30 == 0:
-                    log(f"  处理中: {idx}/{total} — {name}")
-
-            rows, all_db_records, stats = match_trains(llt_db, rt_db, self._db, progress=progress)
-            matched_all, matched_partial, unmatched_all = stats
-
-            log(f"\n匹配完成，正在写入数据库...")
-
-            # Replace match table (in rt.db)
-            rt_db.execute('DELETE FROM train_route_matches')
-            for rec in all_db_records:
-                rt_db.execute(
-                    'INSERT INTO train_route_matches '
-                    '(train_name, seg_start_seq, seg_end_seq, '
-                    ' seg_start_station, seg_end_station, seg_distance_km, '
-                    ' route_id, route_name, is_reverse, match_type, is_matched) '
-                    'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-                    rec)
-            rt_db.commit()
-
-            log("数据库已更新。")
-
-            # ── Detailed summary ──────────────────────────
-
-            # Collect graph stations (all head/tail from railway_track)
-            graph_stations = set()
-            for row in self._db.execute(
-                'SELECT head_station, tail_station FROM railway_track').fetchall():
-                graph_stations.add(row[0])
-                graph_stations.add(row[1])
-
-            # Classify zero-match trains
-            zero_match = [r for r in rows if 'R' not in r[2]]
-
-            name_to_ti = dict(llt_db.execute(
-                'SELECT train_name, train_index FROM trains').fetchall())
-
-            outside = []        # < 2 stations in graph
-            zero_km = []        # all distance_km == 0
-            inside_unmatched = []  # >= 2 stations in graph, but no match
-
-            for r in zero_match:
-                name = r[0]
-                ti = name_to_ti.get(name)
-                stops = llt_db.execute(
-                    'SELECT station_name, distance_km FROM train_stops '
-                    'WHERE train_index=? ORDER BY stop_seq',
-                    (ti,)).fetchall()
-
-                if not stops:
-                    continue
-
-                if all(s[1] == 0 for s in stops):
-                    zero_km.append(name)
-                    continue
-
-                train_stations = set(s[0] for s in stops)
-                in_graph = train_stations & graph_stations
-
-                if len(in_graph) >= 2:
-                    inside_unmatched.append((name, r[1]))
-                else:
-                    outside.append((name, r[1]))
-
-            log(f"\n══════ 匹配完成 ══════")
-            log(f"总车次数: {len(rows)}")
-            log(f"全匹配:   {matched_all}")
-            log(f"部分匹配: {matched_partial}")
-            log(f"零匹配:   {unmatched_all}")
-
-            log(f"\n── 零匹配分类 ──")
-            log(f"图外车次:           {len(outside)} 趟")
-            log(f"0公里特例(Y字头等): {len(zero_km)} 趟")
-            log(f"图内未匹配:         {len(inside_unmatched)} 趟")
-
-            if zero_km:
-                log(f"\n0公里特例车次: {', '.join(zero_km)}")
-
-            if inside_unmatched:
-                log(f"\n── 图内未匹配车次明细 ──")
-                for name, od in inside_unmatched:
-                    log(f"  {name}  ({od})")
-            else:
-                log(f"\n✅ 图内≥2站的车次全部匹配！")
-
-            # ── Unmatched segments inside graph ──────────────
-            # Find segments where both endpoints are graph stations but unmatched
-            in_graph_unmatched = []  # (train_name, start, end, dist)
-            for rec in all_db_records:
-                # rec: (name, seq_s, seq_e, st_s, st_e, dist, rid, rname, rev, type, matched)
-                if rec[10] == 0:  # is_matched == 0
-                    if rec[3] in graph_stations and rec[4] in graph_stations:
-                        in_graph_unmatched.append((rec[0], rec[3], rec[4], rec[5]))
-
-            log(f"\n── 图内未匹配区段（两端都在图内）──")
-            if in_graph_unmatched:
-                name_to_od = {r[0]: r[1] for r in rows}
-                log(f"共 {len(in_graph_unmatched)} 个区段：")
-                for name, ss, es, dist in in_graph_unmatched:
-                    od = name_to_od.get(name, '?-?')
-                    log(f"  {name} ({od}): [{ss}-{es} {dist:.0f}km未匹配]")
-            else:
-                log(f"✅ 无！")
-
-            # Enable close button now that matching is done
-            close_btn.button(QDialogButtonBox.StandardButton.Close).setEnabled(True)
-
-        finally:
-            llt_db.close()
-            rt_db.close()
+        cc_path = os.path.join(os.path.dirname(__file__), 'data', 'cc.db')
+        run_matching_with_progress(self, self._db, cc_path, RT_PATH)
 
     # ── Add new route ────────────────────────────────────
 

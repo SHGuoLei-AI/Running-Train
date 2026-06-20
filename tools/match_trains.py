@@ -185,6 +185,153 @@ def match_trains(llt_db, rt_db, rg_db=None, progress=None):
     return rows, all_db_records, (matched_all, matched_partial, unmatched_all)
 
 
+def run_matching_with_progress(parent, rg_db, cc_path, rt_path):
+    """Run matching engine with progress dialog + summary. Writes to rt.db.
+
+    Returns (rows, all_db_records, stats).
+    rg_db: sqlite3.Connection to rg.db (routes + railway_track)
+    cc_path: path to cc.db (schedule data)
+    rt_path: path to rt.db (region_trains, output matches)
+    """
+    from PySide6.QtWidgets import (QDialog, QVBoxLayout, QTextEdit,
+                                   QDialogButtonBox, QApplication)
+
+    dlg = QDialog(parent)
+    dlg.setWindowTitle("经由匹配进度")
+    dlg.resize(520, 480)
+    dlg_layout = QVBoxLayout(dlg)
+
+    text_edit = QTextEdit()
+    text_edit.setReadOnly(True)
+    dlg_layout.addWidget(text_edit)
+
+    close_btn = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+    close_btn.rejected.connect(dlg.close)
+    close_btn.button(QDialogButtonBox.StandardButton.Close).setEnabled(False)
+    dlg_layout.addWidget(close_btn)
+
+    dlg.show()
+    QApplication.processEvents()
+
+    def log(msg):
+        text_edit.append(msg)
+        QApplication.processEvents()
+
+    log("开始匹配...")
+
+    llt_db = sqlite3.connect(cc_path)
+    rt_db = sqlite3.connect(rt_path)
+
+    try:
+        def progress(name, idx, total):
+            if idx % 30 == 0:
+                log(f"  处理中: {idx}/{total} — {name}")
+
+        rows, all_db_records, stats = match_trains(llt_db, rt_db, rg_db, progress=progress)
+        matched_all, matched_partial, unmatched_all = stats
+
+        log(f"\n匹配完成，正在写入数据库...")
+
+        rt_db.execute('DELETE FROM train_route_matches')
+        for rec in all_db_records:
+            rt_db.execute(
+                'INSERT INTO train_route_matches '
+                '(train_name, seg_start_seq, seg_end_seq, '
+                ' seg_start_station, seg_end_station, seg_distance_km, '
+                ' route_id, route_name, is_reverse, match_type, is_matched) '
+                'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                rec)
+        rt_db.commit()
+
+        log("数据库已更新。")
+
+        # ── Collect graph stations ──
+        graph_stations = set()
+        for row in rg_db.execute(
+            'SELECT head_station, tail_station FROM railway_track').fetchall():
+            graph_stations.add(row[0])
+            graph_stations.add(row[1])
+
+        # ── Classify zero-match trains ──
+        zero_match = [r for r in rows if 'R' not in r[2]]
+
+        name_to_ti = dict(llt_db.execute(
+            'SELECT train_name, train_index FROM trains').fetchall())
+
+        outside = []
+        zero_km = []
+        inside_unmatched = []
+
+        for r in zero_match:
+            name = r[0]
+            ti = name_to_ti.get(name)
+            stops = llt_db.execute(
+                'SELECT station_name, distance_km FROM train_stops '
+                'WHERE train_index=? ORDER BY stop_seq',
+                (ti,)).fetchall()
+
+            if not stops:
+                continue
+
+            if all(s[1] == 0 for s in stops):
+                zero_km.append(name)
+                continue
+
+            train_stations = set(s[0] for s in stops)
+            in_graph = train_stations & graph_stations
+
+            if len(in_graph) >= 2:
+                inside_unmatched.append((name, r[1]))
+            else:
+                outside.append((name, r[1]))
+
+        log(f"\n══════ 匹配完成 ══════")
+        log(f"总车次数: {len(rows)}")
+        log(f"全匹配:   {matched_all}")
+        log(f"部分匹配: {matched_partial}")
+        log(f"零匹配:   {unmatched_all}")
+
+        log(f"\n── 零匹配分类 ──")
+        log(f"图外车次:           {len(outside)} 趟")
+        log(f"0公里特例(Y字头等): {len(zero_km)} 趟")
+        log(f"图内未匹配:         {len(inside_unmatched)} 趟")
+
+        if zero_km:
+            log(f"\n0公里特例车次: {', '.join(zero_km)}")
+
+        if inside_unmatched:
+            log(f"\n── 图内未匹配车次明细 ──")
+            for name, od in inside_unmatched:
+                log(f"  {name}  ({od})")
+        else:
+            log(f"\n✅ 图内≥2站的车次全部匹配！")
+
+        # ── Unmatched segments inside graph ──
+        in_graph_unmatched = []
+        for rec in all_db_records:
+            if rec[10] == 0:  # is_matched == 0
+                if rec[3] in graph_stations and rec[4] in graph_stations:
+                    in_graph_unmatched.append((rec[0], rec[3], rec[4], rec[5]))
+
+        log(f"\n── 图内未匹配区段（两端都在图内）──")
+        if in_graph_unmatched:
+            name_to_od = {r[0]: r[1] for r in rows}
+            log(f"共 {len(in_graph_unmatched)} 个区段：")
+            for name, ss, es, dist in in_graph_unmatched:
+                od = name_to_od.get(name, '?-?')
+                log(f"  {name} ({od}): [{ss}-{es} {dist:.0f}km未匹配]")
+        else:
+            log(f"✅ 无！")
+
+        close_btn.button(QDialogButtonBox.StandardButton.Close).setEnabled(True)
+
+        return rows, all_db_records, stats
+
+    finally:
+        llt_db.close()
+        rt_db.close()
+
+
 if __name__ == '__main__':
     BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     db = sqlite3.connect(os.path.join(BASE, 'data', 'cc.db'))
