@@ -18,7 +18,7 @@ KL_SCHEMA = '''
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE line_list (
     id INTEGER PRIMARY KEY, line_name TEXT UNIQUE NOT NULL,
-    start_station TEXT, end_station TEXT, mileage TEXT
+    start_station TEXT, end_station TEXT, mileage INTEGER
 );
 CREATE TABLE line_stations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
