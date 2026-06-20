@@ -254,7 +254,7 @@ class MainWindow(QMainWindow):
         try:
             row = self._db.execute(
                 "SELECT value FROM meta WHERE key='auto_backup'").fetchone()
-            return row and row[0] == '1'
+            return row is not None and row[0] == '1'
         except Exception:
             return False
 
