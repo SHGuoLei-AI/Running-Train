@@ -1,11 +1,14 @@
 import json
 import os
+import shutil
 import sqlite3
+from datetime import datetime
 from PySide6.QtWidgets import (QMainWindow, QMessageBox, QWidget, QLabel,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QHBoxLayout,
                                QPushButton, QLineEdit, QFileDialog, QScrollArea, QSplitter,
                                QInputDialog)
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction
 from models import (TrainGraph, RailwayPath, RailwayTrack,
                     load_train_graph_from_json, save_train_graph_to_json,
                     load_train_graph_from_db, save_train_graph_to_db,
@@ -36,6 +39,7 @@ class MainWindow(QMainWindow):
         self.menu_file = self.menuBar().addMenu("文件(&F)")
         self.menu_routes = self.menuBar().addMenu("经由(&R)")
         self.menu_tools = self.menuBar().addMenu("工具(&T)")
+        self.menu_settings = self.menuBar().addMenu("设置(&S)")
         self.menu_help = self.menuBar().addMenu("帮助(&H)")
         self.action_exit = self.menu_file.addAction("退出")
         self.action_route_editor = self.menu_routes.addAction("经由维护...")
@@ -46,6 +50,11 @@ class MainWindow(QMainWindow):
         self.action_train_matched_routes = self.menu_routes.addAction("车次匹配的经由")
         self.action_update_schedule = self.menu_tools.addAction("更新时刻表...")
         self.action_update_kl = self.menu_tools.addAction("更新里程表...")
+        self.action_auto_backup = QAction("自动备份", self)
+        self.action_auto_backup.setCheckable(True)
+        self.action_auto_backup.setChecked(self._get_auto_backup())
+        self.menu_settings.addAction(self.action_auto_backup)
+        self.action_delete_backups = self.menu_settings.addAction("删除备份文件...")
         self.action_about = self.menu_help.addAction("关于")
 
         # 文件菜单：打开、保存、另存为、导入/导出 JSON
@@ -64,6 +73,10 @@ class MainWindow(QMainWindow):
 
         # 默认从 DB 加载
         self._load_from_db()
+
+        # 自动备份（如果开启）
+        if self._get_auto_backup():
+            self._do_backup()
 
         self.graph_name_field = QLineEdit(self.train_graph.name)
         self.graph_name_field.setStyleSheet("font-size: 12px; font-weight: bold; border: 1px solid #ccc;")
@@ -215,6 +228,8 @@ class MainWindow(QMainWindow):
         self.action_train_matched_routes.triggered.connect(self.on_train_matched_routes_clicked)
         self.action_update_schedule.triggered.connect(self.on_update_schedule_clicked)
         self.action_update_kl.triggered.connect(self.on_update_kl_clicked)
+        self.action_auto_backup.triggered.connect(self.on_auto_backup_toggled)
+        self.action_delete_backups.triggered.connect(self.on_delete_backups_clicked)
 
     def on_update_schedule_clicked(self):
         QMessageBox.information(self, "更新时刻表",
@@ -226,6 +241,82 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "更新里程表",
             "从 jprailfan.com/tools/stat/ 获取最新客里表数据写入 kl.db。\n\n"
             "待完善：实现下载解析逻辑。")
+
+    # ── 备份 ──────────────────────────────────────────
+
+    @property
+    def _backup_dir(self):
+        d = os.path.join(os.path.dirname(__file__), 'data', 'backup')
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def _get_auto_backup(self):
+        try:
+            row = self._db.execute(
+                "SELECT value FROM meta WHERE key='auto_backup'").fetchone()
+            return row and row[0] == '1'
+        except Exception:
+            return False
+
+    def _set_auto_backup(self, enabled):
+        self._db.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('auto_backup', ?)",
+            ('1' if enabled else '0',))
+        self._db.commit()
+
+    def _do_backup(self):
+        """Copy the 4 DBs to backup dir with timestamp."""
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        data_dir = os.path.join(os.path.dirname(__file__), 'data')
+        for name in ['kl.db', 'cc.db', 'rg.db', 'rt.db']:
+            src = os.path.join(data_dir, name)
+            if os.path.exists(src):
+                dst = os.path.join(self._backup_dir, f'{name}_{ts}')
+                shutil.copy2(src, dst)
+        # Clean old backups: keep last 20
+        all_bak = sorted(os.listdir(self._backup_dir))
+        while len(all_bak) > 80:  # 4 DBs × 20 versions
+            for f in all_bak[:4]:
+                os.remove(os.path.join(self._backup_dir, f))
+            all_bak = all_bak[4:]
+
+    def on_auto_backup_toggled(self, checked):
+        self._set_auto_backup(checked)
+
+    def on_delete_backups_clicked(self):
+        """Dialog to select and delete backup files."""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QListWidget, QDialogButtonBox, QAbstractItemView
+        dlg = QDialog(self)
+        dlg.setWindowTitle("删除备份文件")
+        dlg.resize(500, 400)
+        layout = QVBoxLayout(dlg)
+
+        lst = QListWidget()
+        lst.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        files = sorted(os.listdir(self._backup_dir), reverse=True)
+        for f in files:
+            lst.addItem(f)
+        layout.addWidget(lst)
+
+        btn_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btn_box.accepted.connect(dlg.accept)
+        btn_box.rejected.connect(dlg.reject)
+        layout.addWidget(btn_box)
+
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            selected = [item.text() for item in lst.selectedItems()]
+            if not selected:
+                return
+            reply = QMessageBox.question(self, "确认删除",
+                f"确定要删除 {len(selected)} 个备份文件吗？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes:
+                for f in selected:
+                    os.remove(os.path.join(self._backup_dir, f))
+                QMessageBox.information(self, "完成", f"已删除 {len(selected)} 个备份文件。")
+
+    # ── About ──────────────────────────────────────────
 
     def on_about_clicked(self):
         QMessageBox.about(self, "关于", "欢迎使用动态模拟火车运行图")

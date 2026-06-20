@@ -12,3 +12,4 @@ build/
 *.log
 tools/llt/
 data/old/
+data/backup/
