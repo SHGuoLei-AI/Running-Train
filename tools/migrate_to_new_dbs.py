@@ -23,7 +23,7 @@ CREATE TABLE line_list (
 CREATE TABLE line_stations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     line_name TEXT NOT NULL, station_name TEXT NOT NULL,
-    dist_from_start REAL DEFAULT 0, dist_from_prev REAL DEFAULT 0,
+    dist_from_start INTEGER DEFAULT 0, dist_from_prev INTEGER DEFAULT 0,
     is_junction INTEGER DEFAULT 0
 );
 '''
@@ -51,7 +51,7 @@ CREATE INDEX idx_ts_name ON train_stops(station_name);
 RG_SCHEMA = '''
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE train_graph (
-    name TEXT PRIMARY KEY, length REAL, width REAL, scale REAL DEFAULT 1
+    name TEXT PRIMARY KEY, length INTEGER, width INTEGER, scale REAL DEFAULT 1
 );
 CREATE TABLE railway_path (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,21 +65,21 @@ CREATE TABLE railway_track (
     path_id INTEGER REFERENCES railway_path(id),
     seq INTEGER NOT NULL,
     head_station TEXT, tail_station TEXT,
-    length REAL, deflection REAL DEFAULT 0,
+    length INTEGER, deflection REAL DEFAULT 0,
     draw_head INTEGER DEFAULT 1, draw_tail INTEGER DEFAULT 0
 );
 CREATE INDEX idx_rt_path ON railway_track(path_id);
 CREATE TABLE routes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL, start_station TEXT NOT NULL, end_station TEXT NOT NULL,
-    total_distance REAL, junction_count INTEGER DEFAULT 0,
+    total_distance INTEGER, junction_count INTEGER DEFAULT 0,
     prohibit_high_speed INTEGER DEFAULT 0, prohibit_normal_speed INTEGER DEFAULT 0
 );
 CREATE TABLE route_stations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     route_id INTEGER REFERENCES routes(id),
     seq INTEGER NOT NULL, station_name TEXT NOT NULL,
-    line_name TEXT NOT NULL, cum_distance REAL DEFAULT 0,
+    line_name TEXT NOT NULL, cum_distance INTEGER DEFAULT 0,
     is_junction INTEGER DEFAULT 0
 );
 CREATE INDEX idx_rs_route ON route_stations(route_id);
@@ -93,7 +93,7 @@ CREATE TABLE region_trains (
 CREATE TABLE train_stops (
     train_name TEXT NOT NULL, stop_seq INTEGER NOT NULL,
     station_name TEXT NOT NULL, arrive_time TEXT, depart_time TEXT,
-    distance_km REAL DEFAULT 0,
+    distance_km INTEGER DEFAULT 0,
     PRIMARY KEY (train_name, stop_seq)
 );
 CREATE INDEX idx_rts_name ON train_stops(train_name);
@@ -102,7 +102,7 @@ CREATE TABLE train_route_matches (
     train_name TEXT NOT NULL,
     seg_start_seq INTEGER, seg_end_seq INTEGER,
     seg_start_station TEXT, seg_end_station TEXT,
-    seg_distance_km REAL,
+    seg_distance_km INTEGER,
     route_id INTEGER, route_name TEXT,
     is_reverse INTEGER DEFAULT 0, match_type TEXT, is_matched INTEGER DEFAULT 1,
     FOREIGN KEY (train_name) REFERENCES region_trains(train_name)
