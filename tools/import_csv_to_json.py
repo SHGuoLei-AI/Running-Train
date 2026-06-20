@@ -3,6 +3,7 @@ import csv
 import datetime
 import json
 import os
+import sqlite3
 
 ENCODINGS = ['utf-8-sig', 'utf-8', 'gbk', 'cp936', 'latin1']
 
@@ -218,11 +219,70 @@ def load_existing_graph(graph_path):
     return data.get('TrainGraph', {})
 
 
+def write_graph_db(db_path, graph_payload, preserve_metadata=None):
+    """Write train graph to running_train.db."""
+    if preserve_metadata is None:
+        preserve_metadata = {}
+    db = sqlite3.connect(db_path)
+
+    graph_name = preserve_metadata.get('name', graph_payload['name'])
+    graph_length = preserve_metadata.get('length', graph_payload.get('length', 0)) or 450
+    graph_width = preserve_metadata.get('width', graph_payload.get('width', 0)) or 330
+    graph_scale = preserve_metadata.get('scale', graph_payload.get('scale', 4)) or 4
+
+    # Delete existing data for this graph
+    db.execute(
+        'DELETE FROM railway_track WHERE path_id IN '
+        '(SELECT id FROM railway_path WHERE graph_name=?)', (graph_name,))
+    db.execute('DELETE FROM railway_path WHERE graph_name=?', (graph_name,))
+    db.execute('DELETE FROM train_graph WHERE name=?', (graph_name,))
+
+    # Insert graph
+    db.execute(
+        'INSERT INTO train_graph (name, length, width, scale) VALUES (?,?,?,?)',
+        (graph_name, graph_length, graph_width, graph_scale))
+
+    # Insert paths and tracks
+    for p_data in graph_payload['paths']:
+        cur = db.execute(
+            'INSERT INTO railway_path '
+            '(graph_name, name, code, kl_line_name, start_x, start_y, angle, hidden) '
+            'VALUES (?,?,?,?,?,?,?,?)',
+            (graph_name,
+             p_data.get('name', str(p_data['id'])),
+             str(p_data['id']),
+             p_data.get('kl_line_name', ''),
+             p_data.get('start_x', 0),
+             p_data.get('start_y', 0),
+             p_data.get('angle', 0.0),
+             1 if p_data.get('hidden', False) else 0))
+        path_db_id = cur.lastrowid
+
+        for seq, t_data in enumerate(p_data.get('tracks', [])):
+            db.execute(
+                'INSERT INTO railway_track '
+                '(path_id, seq, head_station, tail_station, length, deflection, '
+                'draw_head, draw_tail) '
+                'VALUES (?,?,?,?,?,?,?,?)',
+                (path_db_id, seq,
+                 t_data.get('head_station', ''),
+                 t_data.get('tail_station', ''),
+                 t_data.get('length', 0),
+                 t_data.get('deflection', 0),
+                 1 if t_data.get('draw_start', True) else 0,
+                 1 if t_data.get('draw_end', False) else 0))
+
+    db.commit()
+    db.close()
+    return graph_name
+
+
 def main():
-    parser = argparse.ArgumentParser(description='从 线路.csv 和 区间.csv 导入数据并更新 上海周边.json。')
+    parser = argparse.ArgumentParser(description='从 线路.csv 和 区间.csv 导入数据并写入 DB 或 JSON。')
     parser.add_argument('--line-csv', default=os.path.join(os.path.dirname(__file__), '线路.csv'), help='线路 CSV 文件路径')
     parser.add_argument('--section-csv', default=os.path.join(os.path.dirname(__file__), '区间.csv'), help='区间 CSV 文件路径')
-    parser.add_argument('--output-json', default=os.path.join(os.path.dirname(__file__), '..', 'data', '上海周边.json'), help='输出 JSON 文件路径')
+    parser.add_argument('--output-json', default=None, help='输出 JSON 文件路径（可选，默认写入 DB）')
+    parser.add_argument('--db', default=os.path.join(os.path.dirname(__file__), '..', 'data', 'running_train.db'), help='输出 DB 路径')
     args = parser.parse_args()
 
     line_rows, line_headers, line_enc = load_csv_rows(args.line_csv)
@@ -230,13 +290,29 @@ def main():
     print(f'Loaded line CSV ({line_enc}): {len(line_rows)} rows')
     print(f'Loaded section CSV ({section_enc}): {len(section_rows)} rows')
 
-    existing_graph = load_existing_graph(args.output_json)
-    default_name = existing_graph.get('name', '上海周边')
-    graph_payload = build_train_graph(line_rows, section_rows, line_headers, section_headers, default_name)
-    output_graph = write_graph_json(args.output_json, graph_payload, preserve_metadata=existing_graph)
+    graph_payload = build_train_graph(line_rows, section_rows, line_headers, section_headers, '上海周边')
 
-    print(f'Wrote JSON to {args.output_json}')
-    print(f'Generated {len(output_graph["TrainGraph"]["paths"])} paths')
+    if args.output_json:
+        # Export to JSON
+        existing_graph = load_existing_graph(args.output_json)
+        output_graph = write_graph_json(args.output_json, graph_payload, preserve_metadata=existing_graph)
+        print(f'Wrote JSON to {args.output_json}')
+        print(f'Generated {len(output_graph["TrainGraph"]["paths"])} paths')
+    else:
+        # Default: write to DB
+        existing_graph = {}
+        if os.path.exists(args.db):
+            db = sqlite3.connect(args.db)
+            existing = db.execute(
+                'SELECT name, length, width, scale FROM train_graph WHERE name=?',
+                ('上海周边',)).fetchone()
+            if existing:
+                existing_graph = {
+                    'name': existing[0], 'length': existing[1],
+                    'width': existing[2], 'scale': existing[3]}
+            db.close()
+        graph_name = write_graph_db(args.db, graph_payload, preserve_metadata=existing_graph)
+        print(f'Wrote to DB {args.db}: graph="{graph_name}", {len(graph_payload["paths"])} paths')
 
 
 if __name__ == '__main__':

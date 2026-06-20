@@ -1,5 +1,6 @@
 import math
 import json
+import sqlite3
 
 
 class TrainGraph:
@@ -138,3 +139,127 @@ def save_train_graph_to_json(train_graph, file_path):
     }
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+
+
+def _resolve_db(db):
+    """Accept either a Connection or a path string, return (conn, own_conn)."""
+    if isinstance(db, str):
+        return sqlite3.connect(db), True
+    return db, False
+
+
+def load_train_graph_from_db(db, graph_name=None):
+    """Load TrainGraph from running_train.db.
+
+    db: sqlite3.Connection or file path string.
+    graph_name: graph name to load (default: first/only graph in DB).
+    """
+    conn, own = _resolve_db(db)
+    try:
+        if graph_name is None:
+            g = conn.execute(
+                'SELECT name, length, width, scale FROM train_graph LIMIT 1').fetchone()
+        else:
+            g = conn.execute(
+                'SELECT name, length, width, scale FROM train_graph WHERE name=?',
+                (graph_name,)).fetchone()
+        if not g:
+            raise ValueError('No train_graph found in database')
+        train_graph = TrainGraph(name=g[0], length=g[1], width=g[2], scale=g[3])
+
+        paths = conn.execute(
+            'SELECT id, name, code, kl_line_name, start_x, start_y, angle, hidden '
+            'FROM railway_path WHERE graph_name=? ORDER BY id',
+            (train_graph.name,)).fetchall()
+
+        for prow in paths:
+            pid, pname, pcode, kl, sx, sy, angle, hidden = prow
+            path_id = pcode or str(pid)
+            kw = {}
+            if kl:
+                kw['kl_line_name'] = kl
+            path = RailwayPath(path_id=path_id, name=pname,
+                               start_x=sx, start_y=sy,
+                               angle=angle or 0.0, hidden=bool(hidden), **kw)
+
+            tracks = conn.execute(
+                'SELECT head_station, tail_station, length, deflection, '
+                'draw_head, draw_tail '
+                'FROM railway_track WHERE path_id=? ORDER BY seq',
+                (pid,)).fetchall()
+
+            for hs, ts, length, deflection, dh, dt in tracks:
+                path.add_track(RailwayTrack(
+                    length=length, deflection=deflection or 0,
+                    head_station=hs or '', tail_station=ts or '',
+                    draw_head=bool(dh), draw_tail=bool(dt)))
+
+            train_graph.add_train_path(path)
+
+        return train_graph
+    finally:
+        if own:
+            conn.close()
+
+
+def save_train_graph_to_db(train_graph, db):
+    """Save TrainGraph to running_train.db (full replace within a transaction).
+
+    db: sqlite3.Connection or file path string.
+    """
+    conn, own = _resolve_db(db)
+    try:
+        graph_name = train_graph.name
+
+        conn.execute('BEGIN')
+        conn.execute(
+            'DELETE FROM railway_track WHERE path_id IN '
+            '(SELECT id FROM railway_path WHERE graph_name=?)',
+            (graph_name,))
+        conn.execute('DELETE FROM railway_path WHERE graph_name=?', (graph_name,))
+
+        conn.execute(
+            'INSERT OR REPLACE INTO train_graph (name, length, width, scale) '
+            'VALUES (?,?,?,?)',
+            (graph_name, train_graph.length, train_graph.width, train_graph.scale))
+
+        for path in train_graph.train_paths:
+            kl = getattr(path, 'kl_line_name', '') or ''
+            cur = conn.execute(
+                'INSERT INTO railway_path '
+                '(graph_name, name, code, kl_line_name, start_x, start_y, angle, hidden) '
+                'VALUES (?,?,?,?,?,?,?,?)',
+                (graph_name, path.name, str(path.id), kl,
+                 path.start_point[0], path.start_point[1],
+                 path.angle, 1 if path.hidden else 0))
+            path_db_id = cur.lastrowid
+
+            for seq, track in enumerate(path.tracks):
+                conn.execute(
+                    'INSERT INTO railway_track '
+                    '(path_id, seq, head_station, tail_station, length, deflection, '
+                    'draw_head, draw_tail) '
+                    'VALUES (?,?,?,?,?,?,?,?)',
+                    (path_db_id, seq,
+                     track.head_station, track.tail_station,
+                     track.length, track.deflection,
+                     1 if track.draw_head else 0,
+                     1 if track.draw_tail else 0))
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        if own:
+            conn.close()
+
+
+def list_graphs_in_db(db):
+    """Return list of (name,) tuples for all train_graphs in the DB."""
+    conn, own = _resolve_db(db)
+    try:
+        return conn.execute('SELECT name FROM train_graph ORDER BY name').fetchall()
+    finally:
+        if own:
+            conn.close()

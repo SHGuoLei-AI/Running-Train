@@ -1,10 +1,14 @@
 import os
+import sqlite3
 from PySide6.QtWidgets import (QMainWindow, QMessageBox, QWidget, QLabel,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QHBoxLayout,
-                               QPushButton, QLineEdit, QFileDialog, QScrollArea, QSplitter)
+                               QPushButton, QLineEdit, QFileDialog, QScrollArea, QSplitter,
+                               QInputDialog)
 from PySide6.QtCore import Qt
 from models import (TrainGraph, RailwayPath, RailwayTrack,
-                    load_train_graph_from_json, save_train_graph_to_json)
+                    load_train_graph_from_json, save_train_graph_to_json,
+                    load_train_graph_from_db, save_train_graph_to_db,
+                    list_graphs_in_db)
 from canvas import DrawingCanvas
 from delegates import RadioDelegate
 
@@ -14,7 +18,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Running Train Application")
         self._refreshing = False
-        self._current_file_path = None
+        self._current_graph_name = None
+
+        # DB connection (persistent, shared across app lifetime)
+        db_path = os.path.join(os.path.dirname(__file__), 'data', 'running_train.db')
+        self._db = sqlite3.connect(db_path)
 
         # 手动创建主窗口部件
         central = QWidget()
@@ -33,18 +41,22 @@ class MainWindow(QMainWindow):
         self.action_train_matched_routes = self.menu_tools.addAction("车次匹配的经由")
         self.action_about = self.menu_help.addAction("关于")
 
-        # 文件菜单：打开、保存、另存为
-        self.action_open = self.menu_file.addAction("打开(&O)")
+        # 文件菜单：打开、保存、另存为、导入/导出 JSON
+        self.action_open = self.menu_file.addAction("打开(&O)...")
         self.action_open.triggered.connect(self.on_open_clicked)
         self.action_save = self.menu_file.addAction("保存(&S)")
         self.action_save.triggered.connect(self.on_save_clicked)
         self.action_save_as = self.menu_file.addAction("另存为(&A)...")
         self.action_save_as.triggered.connect(self.on_save_as_clicked)
+        self.menu_file.addSeparator()
+        self.action_import_json = self.menu_file.addAction("导入 JSON...")
+        self.action_import_json.triggered.connect(self.on_import_json_clicked)
+        self.action_export_json = self.menu_file.addAction("导出 JSON...")
+        self.action_export_json.triggered.connect(self.on_export_json_clicked)
         self.menu_file.insertSeparator(self.action_exit)
 
-        # 默认打开 data/上海周边.json
-        default_path = os.path.join(os.path.dirname(__file__), 'data', '上海周边.json')
-        self._load_from_file(default_path)
+        # 默认从 DB 加载
+        self._load_from_db()
 
         self.graph_name_field = QLineEdit(self.train_graph.name)
         self.graph_name_field.setStyleSheet("font-size: 12px; font-weight: bold; border: 1px solid #ccc;")
@@ -255,23 +267,29 @@ class MainWindow(QMainWindow):
             self.update_graph_param_fields()
             self.canvas.update()
 
-    # ── 文件 I/O ─────────────────────────────────────────
+    # ── DB I/O ──────────────────────────────────────────
 
-    def _load_from_file(self, file_path):
-        self._current_file_path = file_path
-        self.train_graph = load_train_graph_from_json(file_path)
+    def _load_from_db(self, graph_name=None):
+        self.train_graph = load_train_graph_from_db(self._db, graph_name)
+        self._current_graph_name = self.train_graph.name
         self._original_scale = self.train_graph.scale
         self.canvas = DrawingCanvas(self.train_graph)
         if hasattr(self, 'scroll_area'):
             self.scroll_area.setWidget(self.canvas)
 
     def on_open_clicked(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "打开运行图文件",
-            os.path.join(os.path.dirname(__file__), 'data'),
-            "JSON 文件 (*.json);;所有文件 (*)")
-        if file_path:
-            self._load_from_file(file_path)
+        """Switch to a different graph in the DB."""
+        graphs = list_graphs_in_db(self._db)
+        if not graphs:
+            QMessageBox.information(self, "提示", "数据库中没有运行图。可使用 文件→导入 JSON 导入。")
+            return
+        names = [g[0] for g in graphs]
+        if len(names) == 1:
+            QMessageBox.information(self, "提示", f"数据库中只有一份运行图：{names[0]}")
+            return
+        name, ok = QInputDialog.getItem(self, "打开运行图", "选择运行图:", names, 0, False)
+        if ok and name and name != self._current_graph_name:
+            self._load_from_db(name)
             self.refresh_train_path_table()
             self.update_graph_param_fields()
             self.path_selected_label.setText("")
@@ -279,19 +297,64 @@ class MainWindow(QMainWindow):
             self.canvas.update()
 
     def on_save_clicked(self):
-        if self._current_file_path:
-            save_train_graph_to_json(self.train_graph, self._current_file_path)
-        else:
-            self.on_save_as_clicked()
+        save_train_graph_to_db(self.train_graph, self._db)
+        self._current_graph_name = self.train_graph.name
 
     def on_save_as_clicked(self):
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "保存运行图文件",
+        """Save current graph under a new name in the DB."""
+        name, ok = QInputDialog.getText(
+            self, "另存为", "新运行图名称:",
+            text=self.train_graph.name + " (副本)")
+        if ok and name:
+            old_name = self.train_graph.name
+            self.train_graph.name = name
+            try:
+                save_train_graph_to_db(self.train_graph, self._db)
+                self._current_graph_name = name
+                self.update_graph_param_fields()
+            except Exception:
+                self.train_graph.name = old_name
+                raise
+
+    def on_import_json_clicked(self):
+        """Import a JSON file into the DB."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "导入 JSON 运行图",
             os.path.join(os.path.dirname(__file__), 'data'),
+            "JSON 文件 (*.json);;所有文件 (*)")
+        if not file_path:
+            return
+        train_graph = load_train_graph_from_json(file_path)
+        # Check if name already exists in DB
+        existing = self._db.execute(
+            'SELECT 1 FROM train_graph WHERE name=?', (train_graph.name,)).fetchone()
+        if existing:
+            reply = QMessageBox.question(
+                self, "覆盖确认",
+                f"数据库中已存在运行图「{train_graph.name}」，是否覆盖？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        save_train_graph_to_db(train_graph, self._db)
+        self._load_from_db(train_graph.name)
+        self.refresh_train_path_table()
+        self.update_graph_param_fields()
+        self.path_selected_label.setText("")
+        self.rail_track_table.setRowCount(0)
+        self.canvas.update()
+        QMessageBox.information(self, "导入完成",
+            f"成功导入「{train_graph.name}」：{len(train_graph.train_paths)} 条线路")
+
+    def on_export_json_clicked(self):
+        """Export current graph to a JSON file."""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "导出 JSON 运行图",
+            os.path.join(os.path.dirname(__file__), 'data',
+                         f'{self.train_graph.name}.json'),
             "JSON 文件 (*.json);;所有文件 (*)")
         if file_path:
             save_train_graph_to_json(self.train_graph, file_path)
-            self._current_file_path = file_path
+            QMessageBox.information(self, "导出完成", f"已导出到 {file_path}")
 
     # ── 图表参数编辑 ─────────────────────────────────────
 
@@ -569,6 +632,11 @@ class MainWindow(QMainWindow):
         self.rail_track_table.blockSignals(False)
         self.refresh_train_path_table()
         self.canvas.update()
+
+    def closeEvent(self, event):
+        if hasattr(self, '_db') and self._db:
+            self._db.close()
+        super().closeEvent(event)
 
     # ── 辅助方法 ─────────────────────────────────────────
 
