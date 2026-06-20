@@ -55,11 +55,10 @@ CREATE TABLE train_graph (
 );
 CREATE TABLE railway_path (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    graph_name TEXT REFERENCES train_graph(name),
-    code TEXT, name TEXT NOT NULL, kl_line_name TEXT,
-    start_x INTEGER, start_y INTEGER, angle INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0
+    name TEXT NOT NULL, kl_line_name TEXT,
+    start_x INTEGER, start_y INTEGER, angle INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0,
+    sort_order INTEGER DEFAULT 0
 );
-CREATE INDEX idx_rp_graph ON railway_path(graph_name);
 CREATE TABLE railway_track (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     path_id INTEGER REFERENCES railway_path(id),

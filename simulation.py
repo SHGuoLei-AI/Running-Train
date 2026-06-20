@@ -468,7 +468,7 @@ class TrainRenderer:
 
         painter.setPen(QPen(Qt.GlobalColor.black, 1))
         painter.setBrush(pos.color)
-        painter.drawEllipse(QPointF(pos.x, pos.y), 5, 5)
+        painter.drawEllipse(QPointF(pos.x, pos.y), 4, 4)
 
         font = painter.font()
         font.setPixelSize(8)

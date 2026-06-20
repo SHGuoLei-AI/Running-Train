@@ -16,17 +16,12 @@ print(f'JSON: name={g["name"]}, {len(g["paths"])} paths, scale={g.get("scale", 1
 # 2. Connect to DB
 db = sqlite3.connect(DB_PATH)
 
-# 3. Clear existing data for this graph
+# 3. Clear existing data
 graph_name = g['name']
-print(f'Deleting existing data for graph "{graph_name}"...')
+print(f'Deleting existing data...')
 
-# Delete tracks for paths that belong to this graph
-db.execute('''
-    DELETE FROM railway_track WHERE path_id IN (
-        SELECT id FROM railway_path WHERE graph_name=?
-    )
-''', (graph_name,))
-db.execute('DELETE FROM railway_path WHERE graph_name=?', (graph_name,))
+db.execute('DELETE FROM railway_track')
+db.execute('DELETE FROM railway_path')
 db.execute('DELETE FROM train_graph WHERE name=?', (graph_name,))
 
 # 4. Insert train_graph
@@ -39,14 +34,14 @@ db.execute(
 path_count = 0
 track_count = 0
 
-for p_data in g['paths']:
+for sort_order, p_data in enumerate(g['paths']):
     path_count += 1
     cursor = db.execute(
-        'INSERT INTO railway_path (graph_name, name, code, kl_line_name, start_x, start_y, angle, hidden) '
-        'VALUES (?,?,?,?,?,?,?,?)',
-        (graph_name, p_data['name'], p_data['id'], '',  # code = JSON id string
+        'INSERT INTO railway_path (name, kl_line_name, start_x, start_y, angle, hidden, sort_order) '
+        'VALUES (?,?,?,?,?,?,?)',
+        (p_data['name'], '',
          p_data.get('start_x', 0), p_data.get('start_y', 0),
-         p_data.get('angle', 0.0), 1 if p_data.get('hidden', False) else 0)
+         p_data.get('angle', 0.0), 1 if p_data.get('hidden', False) else 0, sort_order)
     )
     path_id = cursor.lastrowid
 

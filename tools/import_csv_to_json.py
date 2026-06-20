@@ -230,11 +230,9 @@ def write_graph_db(db_path, graph_payload, preserve_metadata=None):
     graph_width = preserve_metadata.get('width', graph_payload.get('width', 0)) or 330
     graph_scale = preserve_metadata.get('scale', graph_payload.get('scale', 4)) or 4
 
-    # Delete existing data for this graph
-    db.execute(
-        'DELETE FROM railway_track WHERE path_id IN '
-        '(SELECT id FROM railway_path WHERE graph_name=?)', (graph_name,))
-    db.execute('DELETE FROM railway_path WHERE graph_name=?', (graph_name,))
+    # Delete existing data
+    db.execute('DELETE FROM railway_track')
+    db.execute('DELETE FROM railway_path')
     db.execute('DELETE FROM train_graph WHERE name=?', (graph_name,))
 
     # Insert graph
@@ -243,19 +241,18 @@ def write_graph_db(db_path, graph_payload, preserve_metadata=None):
         (graph_name, graph_length, graph_width, graph_scale))
 
     # Insert paths and tracks
-    for p_data in graph_payload['paths']:
+    for sort_order, p_data in enumerate(graph_payload['paths']):
         cur = db.execute(
             'INSERT INTO railway_path '
-            '(graph_name, name, code, kl_line_name, start_x, start_y, angle, hidden) '
-            'VALUES (?,?,?,?,?,?,?,?)',
-            (graph_name,
-             p_data.get('name', str(p_data['id'])),
-             str(p_data['id']),
+            '(name, kl_line_name, start_x, start_y, angle, hidden, sort_order) '
+            'VALUES (?,?,?,?,?,?,?)',
+            (p_data.get('name', str(p_data['id'])),
              p_data.get('kl_line_name', ''),
              p_data.get('start_x', 0),
              p_data.get('start_y', 0),
              p_data.get('angle', 0.0),
-             1 if p_data.get('hidden', False) else 0))
+             1 if p_data.get('hidden', False) else 0,
+             sort_order))
         path_db_id = cur.lastrowid
 
         for seq, t_data in enumerate(p_data.get('tracks', [])):

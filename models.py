@@ -159,29 +159,23 @@ def load_train_graph_from_db(db, graph_name=None):
     """Load TrainGraph from running_train.db.
 
     db: sqlite3.Connection or file path string.
-    graph_name: graph name to load (default: first/only graph in DB).
+    graph_name: ignored (kept for backward compat); always loads the single graph.
     """
     conn, own = _resolve_db(db)
     try:
-        if graph_name is None:
-            g = conn.execute(
-                'SELECT name, length, width, scale FROM train_graph LIMIT 1').fetchone()
-        else:
-            g = conn.execute(
-                'SELECT name, length, width, scale FROM train_graph WHERE name=?',
-                (graph_name,)).fetchone()
+        g = conn.execute(
+            'SELECT name, length, width, scale FROM train_graph LIMIT 1').fetchone()
         if not g:
             raise ValueError('No train_graph found in database')
         train_graph = TrainGraph(name=g[0], length=g[1], width=g[2], scale=g[3])
 
         paths = conn.execute(
-            'SELECT id, name, code, kl_line_name, start_x, start_y, angle, hidden '
-            'FROM railway_path WHERE graph_name=? ORDER BY id',
-            (train_graph.name,)).fetchall()
+            'SELECT id, name, kl_line_name, start_x, start_y, angle, hidden '
+            'FROM railway_path ORDER BY sort_order, id').fetchall()
 
         for prow in paths:
-            pid, pname, pcode, kl, sx, sy, angle, hidden = prow
-            path_id = pcode or str(pid)
+            pid, pname, kl, sx, sy, angle, hidden = prow
+            path_id = str(pid)
             kw = {}
             if kl:
                 kw['kl_line_name'] = kl
@@ -220,26 +214,23 @@ def save_train_graph_to_db(train_graph, db):
         graph_name = train_graph.name
 
         conn.execute('BEGIN')
-        conn.execute(
-            'DELETE FROM railway_track WHERE path_id IN '
-            '(SELECT id FROM railway_path WHERE graph_name=?)',
-            (graph_name,))
-        conn.execute('DELETE FROM railway_path WHERE graph_name=?', (graph_name,))
+        conn.execute('DELETE FROM railway_track')
+        conn.execute('DELETE FROM railway_path')
 
         conn.execute(
             'INSERT OR REPLACE INTO train_graph (name, length, width, scale) '
             'VALUES (?,?,?,?)',
             (graph_name, train_graph.length, train_graph.width, train_graph.scale))
 
-        for path in train_graph.train_paths:
+        for sort_order, path in enumerate(train_graph.train_paths):
             kl = getattr(path, 'kl_line_name', '') or ''
             cur = conn.execute(
                 'INSERT INTO railway_path '
-                '(graph_name, name, code, kl_line_name, start_x, start_y, angle, hidden) '
-                'VALUES (?,?,?,?,?,?,?,?)',
-                (graph_name, path.name, str(path.id), kl,
+                '(name, kl_line_name, start_x, start_y, angle, hidden, sort_order) '
+                'VALUES (?,?,?,?,?,?,?)',
+                (path.name, kl,
                  path.start_point[0], path.start_point[1],
-                 path.angle, 1 if path.hidden else 0))
+                 path.angle, 1 if path.hidden else 0, sort_order))
             path_db_id = cur.lastrowid
 
             for seq, track in enumerate(path.tracks):

@@ -119,8 +119,8 @@ class MainWindow(QMainWindow):
         self.train_path_table = QTableWidget()
         self.train_path_table.setColumnCount(9)
         self.train_path_table.setHorizontalHeaderLabels(
-            ["ID", "隐", "线路", "X", "Y", "角度", "首站", "末站", "长度"])
-        widths = [40, 20, 150, 40, 40, 40, 80, 80, 40]
+            ["隐", "线路", "线路正式名", "X", "Y", "角度", "首站", "末站", "长度"])
+        widths = [20, 65, 145, 40, 40, 40, 80, 80, 40]
         for i, w in enumerate(widths):
             self.train_path_table.setColumnWidth(i, w)
         self.train_path_table.verticalHeader().setFixedWidth(24)
@@ -160,7 +160,7 @@ class MainWindow(QMainWindow):
         self.rail_track_table.cellClicked.connect(self.on_track_table_cell_clicked)
 
         self._radio_delegate = RadioDelegate()
-        self.train_path_table.setItemDelegateForColumn(1, self._radio_delegate)
+        self.train_path_table.setItemDelegateForColumn(0, self._radio_delegate)
         self.rail_track_table.setItemDelegateForColumn(0, self._radio_delegate)
         self.rail_track_table.setItemDelegateForColumn(2, self._radio_delegate)
 
@@ -434,7 +434,7 @@ class MainWindow(QMainWindow):
     # ── DB I/O ──────────────────────────────────────────
 
     def _load_from_db(self, graph_name=None):
-        self.train_graph = load_train_graph_from_db(self._db, graph_name)
+        self.train_graph = load_train_graph_from_db(self._db)  # graph_name no longer used
         self._current_graph_name = self.train_graph.name
         self._original_scale = self.train_graph.scale
         self.canvas = DrawingCanvas(self.train_graph)
@@ -599,6 +599,9 @@ class MainWindow(QMainWindow):
         except ValueError:
             pass
         self.update_graph_param_fields()
+        self.canvas._update_size()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
 
     # ── 线路表 ────────────────────────────────────────────
 
@@ -611,19 +614,25 @@ class MainWindow(QMainWindow):
         self.train_path_table.blockSignals(False)
 
     def _set_path_row(self, row, path):
-        self.train_path_table.setItem(row, 0, QTableWidgetItem(str(path.id)))
-        self.train_path_table.setItem(row, 2, QTableWidgetItem(path.name))
-        self.train_path_table.setItem(row, 3, QTableWidgetItem(str(int(path.start_point[0]))))
-        self.train_path_table.setItem(row, 4, QTableWidgetItem(str(int(path.start_point[1]))))
-        self.train_path_table.setItem(row, 5, QTableWidgetItem(str(int(path.angle))))
-        self.train_path_table.setItem(row, 6, QTableWidgetItem(path.get_first_station() or ""))
-        self.train_path_table.setItem(row, 7, QTableWidgetItem(path.get_last_station() or ""))
-        self.train_path_table.setItem(row, 8, QTableWidgetItem(str(path.get_length())))
+        # Col 0: hidden checkbox
         chk = QTableWidgetItem()
         chk.setFlags(Qt.ItemFlag.ItemIsEnabled)
         chk.setData(Qt.ItemDataRole.CheckStateRole,
                     Qt.CheckState.Checked if path.hidden else Qt.CheckState.Unchecked)
-        self.train_path_table.setItem(row, 1, chk)
+        self.train_path_table.setItem(row, 0, chk)
+        # Col 1: name
+        self.train_path_table.setItem(row, 1, QTableWidgetItem(path.name))
+        # Col 2: kl_line_name
+        kl = getattr(path, 'kl_line_name', '') or ''
+        self.train_path_table.setItem(row, 2, QTableWidgetItem(kl))
+        # Col 3-5: X, Y, angle
+        self.train_path_table.setItem(row, 3, QTableWidgetItem(str(int(path.start_point[0]))))
+        self.train_path_table.setItem(row, 4, QTableWidgetItem(str(int(path.start_point[1]))))
+        self.train_path_table.setItem(row, 5, QTableWidgetItem(str(int(path.angle))))
+        # Col 6-8: computed
+        self.train_path_table.setItem(row, 6, QTableWidgetItem(path.get_first_station() or ""))
+        self.train_path_table.setItem(row, 7, QTableWidgetItem(path.get_last_station() or ""))
+        self.train_path_table.setItem(row, 8, QTableWidgetItem(str(path.get_length())))
 
     def on_path_item_changed(self, item):
         if self._refreshing:
@@ -633,31 +642,39 @@ class MainWindow(QMainWindow):
         if row >= len(self.train_graph.train_paths):
             return
         path = self.train_graph.train_paths[row]
+        needs_sim_refresh = False
         try:
-            if col == 0:
-                path.id = item.text().strip()
-            elif col == 1:
+            if col == 0:  # hidden (cosmetic)
                 path.hidden = (item.data(Qt.ItemDataRole.CheckStateRole) == Qt.CheckState.Checked)
-            elif col == 2:
+            elif col == 1:  # name (cosmetic)
                 path.name = item.text().strip()
-            elif col == 3:
+            elif col == 2:  # kl_line_name (cosmetic)
+                path.kl_line_name = item.text().strip()
+            elif col == 3:  # X (geometry)
                 x = int(float(item.text().strip()))
                 path.start_point = (x, path.start_point[1])
                 self._update_track_positions(path)
-            elif col == 4:
+                needs_sim_refresh = True
+            elif col == 4:  # Y (geometry)
                 y = int(float(item.text().strip()))
                 path.start_point = (path.start_point[0], y)
                 self._update_track_positions(path)
-            elif col == 5:
+                needs_sim_refresh = True
+            elif col == 5:  # angle (geometry)
                 path.angle = int(float(item.text().strip()))
                 self._update_track_positions(path)
+                needs_sim_refresh = True
         except ValueError:
             pass
         self.canvas._update_size()
         self.canvas.update()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
+        if needs_sim_refresh:
+            self._refresh_simulation()
 
     def on_path_table_cell_clicked(self, row, col):
-        if col != 1:
+        if col != 0:
             return
         item = self.train_path_table.item(row, col)
         if not item:
@@ -683,10 +700,13 @@ class MainWindow(QMainWindow):
         self.train_path_table.insertRow(new_row)
         self._set_path_row(new_row, path)
         self.train_path_table.blockSignals(False)
-        self.train_path_table.setCurrentCell(new_row, 2)
-        self.train_path_table.scrollToItem(self.train_path_table.item(new_row, 2))
-        self.train_path_table.editItem(self.train_path_table.item(new_row, 2))
+        self.train_path_table.setCurrentCell(new_row, 1)
+        self.train_path_table.scrollToItem(self.train_path_table.item(new_row, 1))
+        self.train_path_table.editItem(self.train_path_table.item(new_row, 1))
         self.canvas.update()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
+        self._refresh_simulation()
 
     def on_delete_path_clicked(self):
         row = self.train_path_table.currentRow()
@@ -697,6 +717,9 @@ class MainWindow(QMainWindow):
         self.path_selected_label.setText("")
         self.rail_track_table.setRowCount(0)
         self.canvas.update()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
+        self._refresh_simulation()
 
     def on_move_path_up_clicked(self):
         row = self.train_path_table.currentRow()
@@ -708,8 +731,10 @@ class MainWindow(QMainWindow):
         self._set_path_row(row - 1, paths[row - 1])
         self._set_path_row(row, paths[row])
         self.train_path_table.blockSignals(False)
-        self.train_path_table.setCurrentCell(row - 1, 2)
+        self.train_path_table.setCurrentCell(row - 1, 1)
         self.canvas.update()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
 
     def on_move_path_down_clicked(self):
         row = self.train_path_table.currentRow()
@@ -721,8 +746,10 @@ class MainWindow(QMainWindow):
         self._set_path_row(row, paths[row])
         self._set_path_row(row + 1, paths[row + 1])
         self.train_path_table.blockSignals(False)
-        self.train_path_table.setCurrentCell(row + 1, 2)
+        self.train_path_table.setCurrentCell(row + 1, 1)
         self.canvas.update()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
 
     # ── 区间表 ──────────────────────────────────────────
 
@@ -768,24 +795,26 @@ class MainWindow(QMainWindow):
         if row >= len(path.tracks):
             return
         track = path.tracks[row]
+        needs_sim_refresh = False
         try:
-            if col == 0:
+            if col == 0:  # draw_head (cosmetic)
                 track.draw_head = (item.data(Qt.ItemDataRole.CheckStateRole) == Qt.CheckState.Checked)
-            elif col == 1:
+            elif col == 1:  # head_station (station name → sim refresh)
                 track.head_station = item.text().strip()
-            elif col == 2:
+                needs_sim_refresh = True
+            elif col == 2:  # draw_tail (cosmetic)
                 track.draw_tail = (item.data(Qt.ItemDataRole.CheckStateRole) == Qt.CheckState.Checked)
-            elif col == 3:
+            elif col == 3:  # tail_station (station name → sim refresh)
                 track.tail_station = item.text().strip()
-            elif col == 4:
+                needs_sim_refresh = True
+            elif col == 4:  # length (geometry → sim refresh)
                 track.length = int(float(item.text().strip()))
-            elif col == 5:
+                needs_sim_refresh = True
+            elif col == 5:  # deflection (geometry → sim refresh)
                 track.deflection = int(float(item.text().strip()))
-            elif col == 6:
+                needs_sim_refresh = True
+            elif col == 6:  # label_flip (cosmetic)
                 track.label_flip = 1 if (item.data(Qt.ItemDataRole.CheckStateRole) == Qt.CheckState.Checked) else 0
-                # 立即重建模拟 + 保存到 DB
-                self._refresh_simulation()
-                save_train_graph_to_db(self.train_graph, self._db)
 
             if col in (4, 5):
                 for i in range(row + 1, len(path.tracks)):
@@ -795,6 +824,10 @@ class MainWindow(QMainWindow):
         self._update_path_computed_columns(sel_row)
         self.canvas._update_size()
         self.canvas.update()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
+        if needs_sim_refresh:
+            self._refresh_simulation()
 
     def on_track_table_cell_clicked(self, row, col):
         if col not in (0, 2, 6):
@@ -838,6 +871,9 @@ class MainWindow(QMainWindow):
         self.refresh_train_path_table()
         self.rail_track_table.setCurrentCell(track_row + 1, 1)
         self.canvas.update()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
+        self._refresh_simulation()
 
     def on_add_track_clicked(self):
         row = self.train_path_table.currentRow()
@@ -854,6 +890,9 @@ class MainWindow(QMainWindow):
         self.rail_track_table.blockSignals(False)
         self.refresh_train_path_table()
         self.canvas.update()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
+        self._refresh_simulation()
 
     def on_delete_track_clicked(self):
         sel_row = self.train_path_table.currentRow()
@@ -868,6 +907,9 @@ class MainWindow(QMainWindow):
         self.rail_track_table.blockSignals(False)
         self.refresh_train_path_table()
         self.canvas.update()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
+        self._refresh_simulation()
 
     # ── 模拟 ──────────────────────────────────────────
 
