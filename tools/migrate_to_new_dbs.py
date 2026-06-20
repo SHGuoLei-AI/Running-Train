@@ -65,7 +65,7 @@ CREATE TABLE railway_track (
     path_id INTEGER REFERENCES railway_path(id),
     seq INTEGER NOT NULL,
     head_station TEXT, tail_station TEXT,
-    length INTEGER, deflection REAL DEFAULT 0,
+    length INTEGER, deflection INTEGER DEFAULT 0,
     draw_head INTEGER DEFAULT 1, draw_tail INTEGER DEFAULT 0
 );
 CREATE INDEX idx_rt_path ON railway_track(path_id);
