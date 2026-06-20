@@ -254,9 +254,13 @@ class MainWindow(QMainWindow):
         try:
             row = self._db.execute(
                 "SELECT value FROM meta WHERE key='auto_backup'").fetchone()
-            return row is not None and row[0] == '1'
+            if row is None:
+                # 首次使用默认开启
+                self._set_auto_backup(True)
+                return True
+            return row[0] == '1'
         except Exception:
-            return False
+            return True  # 出错时也默认开启
 
     def _set_auto_backup(self, enabled):
         self._db.execute(
