@@ -9,8 +9,12 @@ import shutil
 import os
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'rg.db')
-BACKUP_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'backup')
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import sys
+sys.path.insert(0, BASE)
+import config
+DB_PATH = config.get_rg_path()
+BACKUP_DIR = os.path.join(BASE, 'data', 'backup')
 
 
 def main():

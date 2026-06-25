@@ -279,8 +279,16 @@ def main():
     parser.add_argument('--line-csv', default=os.path.join(os.path.dirname(__file__), '线路.csv'), help='线路 CSV 文件路径')
     parser.add_argument('--section-csv', default=os.path.join(os.path.dirname(__file__), '区间.csv'), help='区间 CSV 文件路径')
     parser.add_argument('--output-json', default=None, help='输出 JSON 文件路径（可选，默认写入 DB）')
-    parser.add_argument('--db', default=os.path.join(os.path.dirname(__file__), '..', 'data', 'rg.db'), help='输出 DB 路径')
+    parser.add_argument('--db', default=None, help='输出 DB 路径（默认: 当前激活图的 rg.db）')
     args = parser.parse_args()
+
+    # Resolve DB path: use --db arg or fall back to active graph's rg.db
+    if not args.db:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        import config
+        db_path = config.get_rg_path()
+    else:
+        db_path = args.db
 
     line_rows, line_headers, line_enc = load_csv_rows(args.line_csv)
     section_rows, section_headers, section_enc = load_csv_rows(args.section_csv)
@@ -298,6 +306,7 @@ def main():
     else:
         # Default: write to DB
         existing_graph = {}
+        args.db = db_path
         if os.path.exists(args.db):
             db = sqlite3.connect(args.db)
             existing = db.execute(

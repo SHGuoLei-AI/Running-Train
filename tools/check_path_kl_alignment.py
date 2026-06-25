@@ -3,7 +3,9 @@ import sqlite3, sys, os
 sys.stdout.reconfigure(encoding='utf-8')
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RG = sqlite3.connect(os.path.join(BASE, 'data', 'rg.db'))
+sys.path.insert(0, BASE)
+import config
+RG = sqlite3.connect(config.get_rg_path())
 KL = sqlite3.connect(os.path.join(BASE, 'data', 'kl.db'))
 
 # 1. Load kl data

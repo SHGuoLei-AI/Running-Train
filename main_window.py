@@ -19,6 +19,7 @@ from canvas import DrawingCanvas
 from delegates import RadioDelegate
 from simulation import TrainPositioner, SimulationClock
 from sim_controls import SimulationControlPanel
+import config
 
 locale.setlocale(locale.LC_COLLATE, 'chs')  # pinyin sort for Chinese
 
@@ -28,7 +29,6 @@ KL_PATH = os.path.join(os.path.dirname(__file__), 'data', 'kl.db')
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Running Train Application")
         self._refreshing = False
         self._current_graph_name = None
 
@@ -38,8 +38,9 @@ class MainWindow(QMainWindow):
         self._positioner: TrainPositioner | None = None
 
         # DB connection (persistent, shared across app lifetime)
-        db_path = os.path.join(os.path.dirname(__file__), 'data', 'rg.db')
+        db_path = config.get_rg_path()
         self._db = sqlite3.connect(db_path)
+        self.setWindowTitle(f"Running Train — {config.get_active_graph().get('name', '')}")
 
         # 手动创建主窗口部件
         central = QWidget()
@@ -52,10 +53,15 @@ class MainWindow(QMainWindow):
 
         # 菜单栏
         self.menu_file = self.menuBar().addMenu("文件(&F)")
+        self.menu_graph = self.menuBar().addMenu("图(&G)")
         self.menu_routes = self.menuBar().addMenu("经由(&R)")
         self.menu_tools = self.menuBar().addMenu("工具(&T)")
         self.menu_settings = self.menuBar().addMenu("设置(&S)")
         self.menu_help = self.menuBar().addMenu("帮助(&H)")
+
+        # 图菜单：切换激活图
+        self._graph_actions = {}
+        self._build_graph_menu()
         self.action_exit = self.menu_file.addAction("退出")
         self.action_route_editor = self.menu_routes.addAction("经由维护...")
         self.menu_routes.addSeparator()
@@ -85,6 +91,9 @@ class MainWindow(QMainWindow):
         self.action_export_json = self.menu_file.addAction("导出 JSON...")
         self.action_export_json.triggered.connect(self.on_export_json_clicked)
         self.menu_file.insertSeparator(self.action_exit)
+
+        # 图切换信号连接
+        self.action_exit.triggered.connect(self.close)
 
         # 默认从 DB 加载
         self._load_from_db()
@@ -331,15 +340,25 @@ class MainWindow(QMainWindow):
         self._db.commit()
 
     def _do_backup(self):
-        """Copy the 4 DBs to backup dir with timestamp."""
+        """Copy all DBs to backup dir with timestamp."""
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         data_dir = os.path.join(os.path.dirname(__file__), 'data')
-        for name in ['kl.db', 'cc.db', 'rg.db', 'rt.db']:
+        # Common DBs
+        for name in ['kl.db', 'cc.db']:
             src = os.path.join(data_dir, name)
             if os.path.exists(src):
                 dst = os.path.join(self._backup_dir, f'{name}_{ts}')
                 shutil.copy2(src, dst)
-        # Clean old backups: keep last 20
+        # Graph-specific DBs
+        for g in config.load_graphs().get('graphs', []):
+            for key in ('rg_db', 'rt_db'):
+                rpath = g.get(key, '')
+                src = os.path.join(os.path.dirname(__file__), rpath) if not os.path.isabs(rpath) else rpath
+                if os.path.exists(src):
+                    basename = os.path.basename(src)
+                    dst = os.path.join(self._backup_dir, f'{basename}_{ts}')
+                    shutil.copy2(src, dst)
+        # Clean old backups: keep last 20 versions
         all_bak = sorted(os.listdir(self._backup_dir))
         while len(all_bak) > 80:  # 4 DBs × 20 versions
             for f in all_bak[:4]:
@@ -348,6 +367,39 @@ class MainWindow(QMainWindow):
 
     def on_auto_backup_toggled(self, checked):
         self._set_auto_backup(checked)
+
+    # ── 图切换 ──────────────────────────────────────────
+
+    def _build_graph_menu(self):
+        """构建图切换菜单（radio-action 样式）。"""
+        self.menu_graph.clear()
+        self._graph_actions.clear()
+        graphs = config.load_graphs().get('graphs', [])
+        active_id = config.load_graphs().get('active', '')
+        for g in graphs:
+            action = self.menu_graph.addAction(g['name'])
+            action.setCheckable(True)
+            if g['id'] == active_id:
+                action.setChecked(True)
+            action.triggered.connect(lambda checked, gid=g['id']: self._on_switch_graph(gid))
+            self._graph_actions[g['id']] = action
+
+    def _on_switch_graph(self, graph_id: str):
+        """切换激活图并重新加载。"""
+        if graph_id == config.load_graphs().get('active', ''):
+            return
+        config.set_active_graph(graph_id)
+        # 关闭旧连接，打开新连接
+        if hasattr(self, '_db') and self._db:
+            self._db.close()
+        db_path = config.get_rg_path()
+        self._db = sqlite3.connect(db_path)
+        self.setWindowTitle(f"Running Train — {config.get_active_graph().get('name', '')}")
+        # 重新加载
+        self._load_from_db()
+        # 重建模拟
+        self._refresh_simulation()
+        self._build_graph_menu()
 
     def on_delete_backups_clicked(self):
         """Dialog to select and delete backup files."""
@@ -396,7 +448,7 @@ class MainWindow(QMainWindow):
         """Run matching engine directly from menu (same as the button in route editor)."""
         from tools.match_trains import run_matching_with_progress
         cc_path = os.path.join(os.path.dirname(__file__), 'data', 'cc.db')
-        rt_path = os.path.join(os.path.dirname(__file__), 'data', 'rt.db')
+        rt_path = config.get_rt_path()
         run_matching_with_progress(self, self._db, cc_path, rt_path)
 
     def on_route_matched_trains_clicked(self):
@@ -1179,7 +1231,7 @@ class MainWindow(QMainWindow):
 
     def _init_simulation(self):
         """初始化模拟：构建索引、加载车次、以当前时间启动"""
-        rt_path = os.path.join(os.path.dirname(__file__), 'data', 'rt.db')
+        rt_path = config.get_rt_path()
         self._positioner = TrainPositioner(rt_path, self._db, self.train_graph)
 
         # 取系统当前时间
@@ -1196,7 +1248,7 @@ class MainWindow(QMainWindow):
         """重建模拟索引（保留当前时间，用于 track 属性变更后刷新）"""
         if not self._positioner:
             return
-        rt_path = os.path.join(os.path.dirname(__file__), 'data', 'rt.db')
+        rt_path = config.get_rt_path()
         self._positioner = TrainPositioner(rt_path, self._db, self.train_graph)
         # 立即用当前时钟时间刷新列车位置
         self._on_sim_tick(self._sim_clock.current_minute)

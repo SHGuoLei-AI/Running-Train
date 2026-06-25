@@ -1,0 +1,17 @@
+{
+    "graphs": [
+        {
+            "id": "xinjiang",
+            "name": "新疆区域",
+            "rg_db": "data/rg.db",
+            "rt_db": "data/rt.db"
+        },
+        {
+            "id": "shanghai",
+            "name": "上海区域",
+            "rg_db": "data/rg-shanghai.db",
+            "rt_db": "data/rt-shanghai.db"
+        }
+    ],
+    "active": "xinjiang"
+}

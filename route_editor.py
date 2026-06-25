@@ -10,9 +10,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
+import config
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'rg.db')
-RT_PATH = os.path.join(os.path.dirname(__file__), 'data', 'rt.db')
+DB_PATH = config.get_rg_path()
+RT_PATH = config.get_rt_path()
 KL_PATH = os.path.join(os.path.dirname(__file__), 'data', 'kl.db')
 
 

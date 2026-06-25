@@ -4,10 +4,14 @@
 
 | 数据 | 来源 | 角色 |
 |------|------|------|
-| `kl.db` | 客里表 | **唯一里程来源**，不可修改 |
-| `cc.db` | APK提取 | 时刻表数据，不可修改 |
-| `rg.db` | 项目库 | 几何结构：经由表、TrainGraph、RailwayTrack |
-| `rt.db` | 项目库 | 图上车次：region_trains、train_route_matches |
+| `kl.db` | 客里表 | **唯一里程来源**，不可修改（全局共用） |
+| `cc.db` | APK提取 | 时刻表数据，不可修改（全局共用） |
+| `rg.db` | 项目库 | 几何结构：经由表、TrainGraph、RailwayTrack（每图独立） |
+| `rt.db` | 项目库 | 图上车次：region_trains、train_route_matches（每图独立） |
+
+**图切换机制**：见 `data/graphs.json`。通过菜单 **图(&G)** 切换。所有代码通过 `config.py` 解析当前激活图的 DB 路径。
+
+上海区域归档文件：`rg-shanghai.db` / `rt-shanghai.db`。
 
 **三条铁律：**
 1. 时刻表数据不可修改
@@ -111,11 +115,14 @@ all(stops[k][1] in r_dists for k in range(i, j + 1))
 
 ```
 data/
-├── kl.db    # 客里表 — 756线, 6654站 (jprailfan)
-├── cc.db    # 时刻表 — 17168车次, 150841停站 (路路通)
-├── rg.db    # 几何结构 — 1图, 36线路, 51经由, 788站序
-├── rt.db    # 图上车次 — 2528车次, 37243停站, 5316匹配记录
-├── backup/  # 自动备份 (gitignore)
+├── kl.db             # 客里表 — 756线, 6654站 (jprailfan)
+├── cc.db             # 时刻表 — 17168车次, 150841停站 (路路通)
+├── rg.db             # 几何结构（当前激活图: 新疆）
+├── rt.db             # 图上车次（当前激活图: 新疆）
+├── rg-shanghai.db    # 几何结构 — 上海区域归档
+├── rt-shanghai.db    # 图上车次 — 上海区域归档
+├── graphs.json       # 图配置（多图切换）
+├── backup/           # 自动备份 (gitignore)
 └── 数据结构.md
 ```
 

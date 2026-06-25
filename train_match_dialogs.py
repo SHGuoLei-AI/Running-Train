@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QHeaderView, QAbstractItemView, QWidget, QTextEdit,
 )
 from PySide6.QtCore import Qt
+import config
 
 try:
     locale.setlocale(locale.LC_COLLATE, 'chs')
@@ -18,8 +19,8 @@ except Exception:
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CC_PATH = os.path.join(BASE_DIR, 'data', 'cc.db')
-RG_PATH = os.path.join(BASE_DIR, 'data', 'rg.db')
-RT_PATH = os.path.join(BASE_DIR, 'data', 'rt.db')
+RG_PATH = config.get_rg_path()
+RT_PATH = config.get_rt_path()
 
 
 # ═══════════════════════════════════════════════════════════════════

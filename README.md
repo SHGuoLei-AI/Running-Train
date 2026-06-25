@@ -1,34 +1,64 @@
 # Running Train
 
-基于 PySide6 的铁路运行图编辑工具，集成经由-车次匹配引擎。
+基于 PySide6 的铁路运行图编辑工具，集成经由-车次匹配引擎。支持多图切换。
 
 ## 当前状态
 
+### 新疆区域（新建）
 | 指标 | 数量 |
 |------|------|
-| 图内线路 | 36 条（39 path，其中 0 条隐藏） |
+| 图内线路 | 0 条 |
+| 图内区段 | 0 个 |
+| 图内站 | 0 个 |
+| 经由总数 | 0 条 |
+
+### 上海区域（归档）
+| 指标 | 数量 |
+|------|------|
+| 图内线路 | 36 条（39 path） |
 | 图内区段 | 222 个 |
-| 图内站 | 161 个（railway_track head/tail） |
+| 图内站 | 161 个 |
 | 经由总数 | 51 条 |
 | 经由站序 | 788 个 |
-| 客里表线路 | 756 条，6654 站 |
-| 时刻表车次 | 17,168 趟，150,841 停站 |
 | 图内车次 | 2,528 趟，37,243 停站 |
 | 匹配全/部分/零 | 399 / 1,903 / 226 |
-| 客运表修订 | 3 项（[[kl_revisions.md](data/kl_revisions.md)]） |
+
+| 客里表线路 | 756 条，6654 站 |
+| 时刻表车次 | 17,168 趟，150,841 停站 |
+| 客运表修订 | 3 项（[kl_revisions.md](data/kl_revisions.md)） |
 
 ## 数据架构
 
 ```
 data/
-├── kl.db    # 客里表 (536 KB) — 756 线, 6654 站
-├── cc.db    # 时刻表 (12 MB) — 3298 站, 17168 车次, 150841 停站
-├── rg.db    # 几何结构 (135 KB) — 1 图, 36 线路, 51 经由
-├── rt.db    # 图上车次 (6 MB) — 2528 车次, 37243 停站, 5316 匹配
-├── backup/  # 自动备份 (不入 git)
-├── old/     # 旧文件归档 (不入 git)
-└── 数据结构.md  # 完整 schema 文档
+├── kl.db             # 客里表 (536 KB) — 756 线, 6654 站（共用）
+├── cc.db             # 时刻表 (12 MB) — 3298 站, 17168 车次（共用）
+├── rg.db             # 几何结构 — 新疆区域（当前激活图）
+├── rt.db             # 图上车次 — 新疆区域（当前激活图）
+├── rg-shanghai.db    # 几何结构 — 上海区域（归档）
+├── rt-shanghai.db    # 图上车次 — 上海区域（归档）
+├── graphs.json       # 图配置文件
+├── backup/           # 自动备份 (不入 git)
+├── old/              # 旧文件归档 (不入 git)
+└── 数据结构.md        # 完整 schema 文档
 ```
+
+### 多图切换
+
+通过 `data/graphs.json` 管理多个运行图。菜单 **图(&G)** 可在不同图之间切换：
+
+```
+graphs.json:
+{
+    "graphs": [
+        {"id": "xinjiang", "name": "新疆区域", "rg_db": "data/rg.db", "rt_db": "data/rt.db"},
+        {"id": "shanghai", "name": "上海区域", "rg_db": "data/rg-shanghai.db", "rt_db": "data/rt-shanghai.db"}
+    ],
+    "active": "xinjiang"
+}
+```
+
+所有代码通过 `config.py` 解析当前激活图的 DB 路径，无需修改各模块。
 
 ### 四库关系
 
@@ -95,6 +125,7 @@ running_train/
 ├── models.py                # 数据模型 + DB I/O + JSON I/O
 ├── canvas.py                # 画布（轨道绘制 + 列车绘制）
 ├── delegates.py             # 单选委托（空心/实心圆）
+├── config.py                # 图配置管理（多图切换 + DB 路径解析）
 ├── simulation.py            # 模拟引擎（RouteTrackIndex + TrainPositioner + Clock + Renderer）
 ├── sim_controls.py          # 模拟控制面板（启停合一 + 步进 + 速度）
 ├── route_editor.py          # 经由编辑对话框

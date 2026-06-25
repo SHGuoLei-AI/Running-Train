@@ -341,9 +341,11 @@ def run_matching_with_progress(parent, rg_db, cc_path, rt_path):
 
 if __name__ == '__main__':
     BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, BASE)
+    import config
     db = sqlite3.connect(os.path.join(BASE, 'data', 'cc.db'))
-    rg = sqlite3.connect(os.path.join(BASE, 'data', 'rg.db'))
-    rt = sqlite3.connect(os.path.join(BASE, 'data', 'rt.db'))
+    rg = sqlite3.connect(config.get_rg_path())
+    rt = sqlite3.connect(config.get_rt_path())
 
     print(f'Matching...')
     rows, all_db_records, stats = match_trains(db, rt, rg)
