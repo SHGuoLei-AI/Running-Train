@@ -11,5 +11,7 @@ build/
 .vscode/
 *.log
 tools/llt/
+tools-backup/
 data/old/
 data/backup/
+zero_match_trains.txt

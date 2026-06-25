@@ -65,6 +65,13 @@ SELECT DISTINCT line_name FROM line_stations WHERE line_name LIKE '%联络%'
 - 对每个起点 i，找到最长的连续子序列 `train[i:j+1]` 在某条经由上出现
 - 优先最长匹配段
 
+### 中间站校验
+所有匹配类型（正向/反向/端点/中间段）均需通过中间停站校验：
+```python
+all(stops[k][1] in r_dists for k in range(i, j + 1))
+```
+防止车次通过不在经由上的中间站被错误匹配（如 R11/R13 错误匹配经如皋南区段）。
+
 ## 四、排查零匹配方法
 
 1. 查车次实际距离：`train_stops.distance_km` 差值
@@ -79,27 +86,26 @@ SELECT DISTINCT line_name FROM line_stations WHERE line_name LIKE '%联络%'
 | 指标 | 数量 |
 |------|------|
 | 经由总数 | 51条 |
-| 图内站 | 152个（railway_track） |
-| 图内线路 | 28条 |
-| 全匹配车次 | 438 |
-| 部分匹配车次 | 2297 |
-| 零匹配车次 | 270 |
-| 图外车次 | 254 |
-| 0km特例 | 1（Y字头） |
-| 图内未匹配 | 15 |
+| 图内站 | 161个（railway_track） |
+| 图内线路 | 36条（kl_line_name），39 path |
+| 图内区段 | 222个 |
+| 全匹配车次 | 399（所有区段均匹配） |
+| 部分匹配车次 | 1903 |
+| 零匹配车次 | 226 |
+| 图内车次 | 2528 |
+| 0km特例 | 3（Y字头） |
 
 ### 模拟模块
 
 | 指标 | 值 |
 |------|------|
-| SegmentIndex 站对 | 352 |
-| 加载车次 | 3,005 |
-| BFS 路径覆盖 | 10,951/34,238 段 (32.0%) |
-| 午间可见 | 277 趟 |
-| 高峰可见 | 294 趟 (16:00) |
+| 加载车次 | 2,528 |
+| 匹配上车次 | 2,302 (91.1%) |
+| RouteTrackIndex 经由站对 | 每经由预计算相邻站序→track 映射 |
+| 定位算法 | train_route_matches + RouteTrackIndex |
 | 每帧计算 | ~8.6ms |
 
-模拟算法见 [[simulation-segment-matching-v1]]。
+模拟算法：TrainPositioner 使用 `train_route_matches` 中的 matched 区段，通过 RouteTrackIndex 预计算映射将经由站序映射到图内 track 序列，再进行时间比例线性插值。跨线接续站对（同站不同线、距离为 0）自动跳过。仅绘制匹配到经由的区段，图外区段不画。
 
 ## 六、数据架构
 
@@ -107,8 +113,8 @@ SELECT DISTINCT line_name FROM line_stations WHERE line_name LIKE '%联络%'
 data/
 ├── kl.db    # 客里表 — 756线, 6654站 (jprailfan)
 ├── cc.db    # 时刻表 — 17168车次, 150841停站 (路路通)
-├── rg.db    # 几何结构 — 1图, 28线路, 51经由, 786站序
-├── rt.db    # 图上车次 — 3005车次, 37243停站, 6398匹配记录
+├── rg.db    # 几何结构 — 1图, 36线路, 51经由, 788站序
+├── rt.db    # 图上车次 — 2528车次, 37243停站, 5316匹配记录
 ├── backup/  # 自动备份 (gitignore)
 └── 数据结构.md
 ```
@@ -128,6 +134,7 @@ rg.db 维护：`meta.kl_version` ↔ `kl.db.meta.version`
 | `tools/check_kl_route51.py` | 查询kl线路数据辅助排查 |
 | `route_finder.py` | 自动BFS搜索两站间路径（辅助工具） |
 | `tools/migrate_json_to_db.py` | JSON→DB 迁移（已执行） |
-| `simulation.py` | 模拟引擎：SegmentIndex + TrainPositioner + SimulationClock |
+| `simulation.py` | 模拟引擎：RouteTrackIndex + TrainPositioner + SimulationClock + TrainRenderer |
 | `sim_controls.py` | 模拟控制面板 |
 | `canvas.py` | 画布：Pass 1(线路) + Pass 2(站名) + Pass 3(列车) |
+| `models.py` | 数据模型：TrainGraph、RailwayPath、RailwayTrack（含方向字段） |

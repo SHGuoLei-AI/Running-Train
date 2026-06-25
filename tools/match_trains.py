@@ -89,32 +89,39 @@ def match_trains(llt_db, rt_db, rg_db=None, progress=None):
                     if si[1] == rst and stops[j][1] in r_dists:
                         r_d = r_dists[stops[j][1]]
                         if abs(sd - r_d) == 0:
-                            matches.append((i, j, rid, rname, sd, False, si[1], stops[j][1]))
+                            if all(stops[k][1] in r_dists for k in range(i, j + 1)):
+                                matches.append((i, j, rid, rname, sd, False, si[1], stops[j][1]))
                     # Partial match: train start is on the route
                     if stops[j][1] == ren and si[1] in r_dists:
                         r_d = rdist - r_dists[si[1]]
                         if abs(sd - r_d) == 0:
-                            matches.append((i, j, rid, rname, sd, False, si[1], stops[j][1]))
+                            if all(stops[k][1] in r_dists for k in range(i, j + 1)):
+                                matches.append((i, j, rid, rname, sd, False, si[1], stops[j][1]))
                     # Reverse partial
                     rev_sts = route_stations.get(-rid, [])
                     rev_dists = {s[0]: s[1] for s in rev_sts}
                     if si[1] == ren and stops[j][1] in rev_dists:
                         r_d = rev_dists[stops[j][1]]
                         if abs(sd - r_d) == 0:
-                            matches.append((i, j, rid, rname, sd, True, si[1], stops[j][1]))
+                            if all(stops[k][1] in rev_dists for k in range(i, j + 1)):
+                                matches.append((i, j, rid, rname, sd, True, si[1], stops[j][1]))
                     if stops[j][1] == rst and si[1] in rev_dists:
                         r_d = rdist - rev_dists[si[1]]
                         if abs(sd - r_d) == 0:
-                            matches.append((i, j, rid, rname, sd, True, si[1], stops[j][1]))
+                            if all(stops[k][1] in rev_dists for k in range(i, j + 1)):
+                                matches.append((i, j, rid, rname, sd, True, si[1], stops[j][1]))
                     # Middle segment: both endpoints on route (neither at endpoints)
+                    # Must also verify ALL intermediate stops are on the route
                     if si[1] in r_dists and stops[j][1] in r_dists:
                         r_d = r_dists[stops[j][1]] - r_dists[si[1]]
                         if abs(sd - r_d) == 0 and r_d > 0:
-                            matches.append((i, j, rid, rname, sd, False, si[1], stops[j][1]))
+                            if all(stops[k][1] in r_dists for k in range(i, j + 1)):
+                                matches.append((i, j, rid, rname, sd, False, si[1], stops[j][1]))
                     if si[1] in rev_dists and stops[j][1] in rev_dists:
                         r_d = rev_dists[stops[j][1]] - rev_dists[si[1]]
                         if abs(sd - r_d) == 0 and r_d > 0:
-                            matches.append((i, j, rid, rname, sd, True, si[1], stops[j][1]))
+                            if all(stops[k][1] in rev_dists for k in range(i, j + 1)):
+                                matches.append((i, j, rid, rname, sd, True, si[1], stops[j][1]))
 
         # Fallback for 0km trains: match by station name sequence only
         if not matches and all(s[2] == 0 for s in stops):

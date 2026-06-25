@@ -1,9 +1,9 @@
 """列车运行模拟核心模块
 
-SegmentIndex: 站对→画布坐标映射
-TrainPositioner: 车次→时刻→画布位置
+RouteTrackIndex: 经由站序→图内 track 序列预计算映射
+TrainPositioner: 车次→train_route_matches→画布位置（时间比例线性插值）
 SimulationClock: 模拟时钟 0-1439 分钟循环
-TrainRenderer: 列车绘制
+TrainRenderer: 列车绘制（圆点 + 方向标签）
 """
 import math
 import re
@@ -48,7 +48,8 @@ class TrackInfo:
     length_km: int
     angle_rad: float
     path_code: str = ""
-    label_flip: int = 0
+    up_direction: str = "N"
+    down_direction: str = "S"
 
 
 @dataclass
@@ -68,7 +69,7 @@ class TrainPosition:
     y: float
     label: str      # 显示用的车次号
     color: QColor
-    label_flip: int = 0  # 0=正画, 1=反画（本段 track 的 label_flip）
+    direction: str = "N"  # 标签罗盘方向（N/S/E/W/NE/NW/SE/SW）
 
 
 # ——————————————————————————————————————
@@ -101,7 +102,8 @@ class SegmentIndex:
                     length_km=track.length,
                     angle_rad=math.radians(track.actual_angle),
                     path_code=str(path_code),
-                    label_flip=getattr(track, 'label_flip', 0),
+                    up_direction=getattr(track, 'up_direction', 'N') or 'N',
+                    down_direction=getattr(track, 'down_direction', 'S') or 'S',
                 )
                 # 双向索引（同一 TrackInfo 对象，通过 head/tail 判断方向）
                 idx.segment_map[(track.head_station, track.tail_station)] = info
@@ -148,10 +150,166 @@ class SegmentIndex:
 
 
 # ——————————————————————————————————————
+# RouteTrackIndex
+# ——————————————————————————————————————
+
+class RouteTrackIndex:
+    """经由站序 → 图内 track 序列的预计算映射。
+
+    从 rg.db 的经由数据 + TrainGraph 的轨道几何，预先计算
+    每条经由上任意两个连续站序之间的图内 track 序列。
+    """
+
+    def __init__(self):
+        # (route_id, from_seq, to_seq) → list[TrackInfo]
+        self._pair_tracks: dict[tuple, list[TrackInfo]] = {}
+        # route_id → [(seq, station_name, line_name, cum_km), ...]
+        self._route_stations: dict[int, list[tuple]] = {}
+        # route_id → {station_name: seq}
+        self._route_stn_seq: dict[int, dict[str, int]] = {}
+        # 隐藏 path 的 id 集合（参与匹配但不画列车）
+        self.hidden_path_ids: set[str] = set()
+
+    @classmethod
+    def build(cls, rg_conn, train_graph) -> "RouteTrackIndex":
+        idx = cls()
+        scale = train_graph.scale
+
+        # — 1. 构建 per-path 索引：path_id → {station: track_index} —
+        path_stations: dict[str, dict[str, int]] = {}   # path_id → {stn: ti}
+        path_tracks: dict[str, list[TrackInfo]] = {}    # path_id → [TrackInfo]
+        line_paths: dict[str, list[str]] = {}            # kl_line_name → [path_id]
+
+        for path in train_graph.train_paths:
+            # 隐藏的 path 也参与经由匹配，只是画布上不画
+            if path.hidden:
+                idx.hidden_path_ids.add(path.id)
+            kl = getattr(path, 'kl_line_name', '') or ''
+            pid = path.id
+
+            stn_map: dict[str, int] = {}
+            track_infos: list[TrackInfo] = []
+
+            for ti, track in enumerate(path.tracks):
+                sx, sy = track.start_point
+                ex, ey = track.end_point()
+                info = TrackInfo(
+                    head_station=track.head_station,
+                    tail_station=track.tail_station,
+                    x1=int(sx * scale), y1=int(sy * scale),
+                    x2=int(ex * scale), y2=int(ey * scale),
+                    length_km=track.length,
+                    angle_rad=math.radians(track.actual_angle),
+                    path_code=str(pid),
+                    up_direction=getattr(track, 'up_direction', 'N') or 'N',
+                    down_direction=getattr(track, 'down_direction', 'S') or 'S',
+                )
+                track_infos.append(info)
+                stn_map[track.head_station] = ti
+
+            if path.tracks:
+                stn_map[path.tracks[-1].tail_station] = len(path.tracks)
+
+            path_stations[pid] = stn_map
+            path_tracks[pid] = track_infos
+            if kl:
+                line_paths.setdefault(kl, []).append(pid)
+
+        # — 2. 加载所有经由站序 —
+        for (rid,) in rg_conn.execute('SELECT id FROM routes ORDER BY id').fetchall():
+            sts = rg_conn.execute(
+                'SELECT seq, station_name, line_name, cum_distance '
+                'FROM route_stations WHERE route_id=? ORDER BY seq', (rid,)
+            ).fetchall()
+            idx._route_stations[rid] = sts
+            stn_seq: dict[str, int] = {}
+            for seq, sn, ln, cd in sts:
+                stn_seq[sn] = seq
+            idx._route_stn_seq[rid] = stn_seq
+
+            if len(sts) < 2:
+                continue
+
+            # — 3. 为每对连续站序找图内 track —
+            for i in range(len(sts) - 1):
+                seq_a, stn_a, line_a, _ = sts[i]
+                seq_b, stn_b, line_b, _ = sts[i + 1]
+
+                pids = line_paths.get(line_a, [])
+                found = False
+                for pid in pids:
+                    stn_idx = path_stations.get(pid, {})
+                    tracks = path_tracks.get(pid, [])
+                    ia = stn_idx.get(stn_a)
+                    ib = stn_idx.get(stn_b)
+                    if ia is not None and ib is not None and ia != ib:
+                        sub = (tracks[ia:ib] if ia < ib
+                               else list(reversed(tracks[ib:ia])))
+                        if sub:
+                            idx._pair_tracks[(rid, seq_a, seq_b)] = sub
+                            found = True
+                            break
+
+        return idx
+
+    def get_tracks_between(self, route_id: int,
+                           from_station: str, to_station: str
+                           ) -> Optional[list[TrackInfo]]:
+        """获取经由上两站之间（含中间所有非停站站）的全部 track 序列。
+
+        Returns: track 列表（按行进顺序），或 None（映射缺失）。
+        """
+        stn_seq = self._route_stn_seq.get(route_id, {})
+        seq_a = stn_seq.get(from_station)
+        seq_b = stn_seq.get(to_station)
+        if seq_a is None or seq_b is None:
+            return None
+
+        all_tracks: list[TrackInfo] = []
+        rng = range(seq_a, seq_b) if seq_a < seq_b else range(seq_b, seq_a)
+        for s in rng:
+            key = (route_id, s, s + 1)
+            pair = self._pair_tracks.get(key)
+            if pair is None:
+                # 跨线接续站（同站不同线，距离为0）允许跳过
+                # sts 按 seq 排序，索引 = seq-1
+                sts = self._route_stations.get(route_id, [])
+                idx_a = s - 1   # seq s 在列表中的索引
+                idx_b = s        # seq s+1 在列表中的索引
+                if 0 <= idx_a < len(sts) and 0 <= idx_b < len(sts):
+                    if sts[idx_a][1] == sts[idx_b][1]:
+                        continue  # 跳过接续站对
+                return None  # 非接续站的缺失 → 真正失败
+            all_tracks.extend(pair)
+
+        if seq_a > seq_b:
+            all_tracks = list(reversed(all_tracks))
+        return all_tracks if all_tracks else None
+
+    def get_route_station_distance(self, route_id: int, station_name: str) -> Optional[float]:
+        """获取经由上某站的累计里程。"""
+        for seq, sn, ln, cd in self._route_stations.get(route_id, []):
+            if sn == station_name:
+                return cd
+        return None
+
+
+# ——————————————————————————————————————
 # TrainPositioner
 # ——————————————————————————————————————
 
 TRACK_OFFSET = 10  # 上行/下行距中心线的像素偏移量
+
+DIRECTION_VECTORS = {
+    'N': (0, -1), 'S': (0, 1), 'E': (1, 0), 'W': (-1, 0),
+}
+DIRECTION_LABELS = ['N', 'E', 'S', 'W']
+
+
+def _perpendicular_offset(angle_rad: float, sign: int) -> tuple[float, float]:
+    """垂直轨道方向的偏移量（sign=+1=屏幕上方/上行方向）"""
+    return -sign * TRACK_OFFSET * -math.sin(angle_rad), -sign * TRACK_OFFSET * math.cos(angle_rad)
+
 
 
 def _parse_minute(t: Optional[str]) -> Optional[int]:
@@ -175,27 +333,29 @@ def _get_line_sign(train_label: str) -> int:
     return 1  # 默认上行
 
 
-def _perpendicular_offset(angle_rad: float, sign: int) -> tuple[float, float]:
-    """垂直轨道方向的偏移量：上行 +10px，下行 -10px"""
-    # 轨道局部坐标系中 y+10 对应全局的 (-sin, cos) 方向
-    return sign * TRACK_OFFSET * -math.sin(angle_rad), sign * TRACK_OFFSET * math.cos(angle_rad)
-
 
 class TrainPositioner:
-    """根据模拟时钟计算所有车次的画布位置"""
+    """基于经由匹配数据的列车定位器。
 
-    def __init__(self, rt_db_path: str, segment_index: SegmentIndex):
-        self._seg = segment_index
-        self._trains: dict[str, list[TrainStop]] = {}        # train_name → 有序停站
-        self._seg_paths: dict[tuple[str, int], list[TrackInfo]] = {}  # (train_name, i) → tracks
+    使用 train_route_matches 确定车次在图内的区段，
+    通过 RouteTrackIndex 将经由站序映射到画布 track 坐标。
+    仅绘制匹配到经由的区段（matched），图外区段（unmatched）不画。
+    """
+
+    def __init__(self, rt_db_path: str, rg_conn, train_graph):
+        self._trains: dict[str, list[TrainStop]] = {}       # train_name → 有序停站
+        self._matches: dict[str, list[dict]] = {}           # train_name → 匹配段列表
+        self._route_index = RouteTrackIndex.build(rg_conn, train_graph)
         self._load(rt_db_path)
-        self._build_paths()
+
+    # ── 加载 ────────────────────────────────────────────
 
     def _load(self, db_path: str):
-        """从 rt.db 加载所有车次的停站序列"""
+        """从 rt.db 加载车次停站和经由匹配数据。"""
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         try:
+            # 加载停站
             rows = conn.execute(
                 'SELECT train_name, stop_seq, station_name, arrive_time, depart_time, '
                 'distance_km, segment_train_no '
@@ -224,23 +384,33 @@ class TrainPositioner:
 
             if stops and current_train:
                 self._trains[current_train] = stops
+
+            # 加载匹配段（仅 matched）
+            match_rows = conn.execute(
+                'SELECT train_name, seg_start_seq, seg_end_seq, route_id '
+                'FROM train_route_matches '
+                'WHERE match_type=\'matched\' AND route_id IS NOT NULL '
+                'ORDER BY train_name, seg_start_seq'
+            ).fetchall()
+
+            for mr in match_rows:
+                tn = mr['train_name']
+                seg = {
+                    'start_seq': mr['seg_start_seq'],
+                    'end_seq': mr['seg_end_seq'],
+                    'route_id': mr['route_id'],
+                }
+                self._matches.setdefault(tn, []).append(seg)
         finally:
             conn.close()
 
-    def _build_paths(self):
-        """预计算每个车次每对连续停站之间的 track 序列（含多跳 BFS）"""
-        for train_name, stops in self._trains.items():
-            for i in range(len(stops) - 1):
-                a = stops[i].station_name
-                b = stops[i + 1].station_name
-                path = self._seg.find_path(a, b)
-                if path:
-                    self._seg_paths[(train_name, i)] = path
+    # ── 定位 ────────────────────────────────────────────
 
     def position(self, train_name: str, minute: float) -> Optional[TrainPosition]:
-        """计算一趟车在指定时刻的画布位置
+        """计算一趟车在指定时刻的画布位置。
 
-        使用归一化时间线（以 first_dep 为基准，跨天时间 +1440）避免午夜判断。
+        仅当列车位于匹配段内时才返回位置（否则视为图外，不画）。
+        始发站开车前5分钟出现，终到站到达后5分钟消失。
         """
         stops = self._trains.get(train_name)
         if not stops or len(stops) < 2:
@@ -251,8 +421,7 @@ class TrainPositioner:
         if first_dep is None or last_arr is None:
             return None
 
-        # — 归一化所有停站时间 —
-        # 以 first_dep 为基准，小于 first_dep 的 += 1440（跨午夜）
+        # — 归一化时间 —
         norm: list[tuple[Optional[int], Optional[int]]] = []
         for s in stops:
             a = s.arr_min
@@ -266,20 +435,26 @@ class TrainPositioner:
         T = minute
         if T < first_dep:
             T += 1440
-        if T > norm[-1][0]:  # T > 末站到达
-            return None
-        if T < first_dep:
-            return None
 
-        # — 查找 T 所在区间 —
+        # 5分钟规则：始发前5分钟出现，终到后5分钟消失
+        if T < first_dep - 5:
+            return None
+        if last_arr is not None:
+            la = last_arr
+            if la < first_dep:
+                la += 1440
+            if T > la + 5:
+                return None
+
+        # — 找到 T 所在的停站区间 —
         for i in range(len(stops)):
             arr_i, dep_i = norm[i]
 
-            # 停站中？arr[i] ≤ T ≤ dep[i]
+            # 停站中？
             if arr_i is not None and dep_i is not None and arr_i <= T <= dep_i:
                 return self._at_station(stops, i, train_name)
 
-            # 区间运行？dep[i] < T < arr[i+1]
+            # 区间运行？
             if i < len(stops) - 1:
                 arr_next = norm[i + 1][0]
                 if dep_i is not None and arr_next is not None and dep_i < T < arr_next:
@@ -287,53 +462,76 @@ class TrainPositioner:
 
         return None
 
+    # ── 停站定位 ────────────────────────────────────────
+
+    def _on_hidden_path(self, tracks: list[TrackInfo]) -> bool:
+        """检查 track 序列中是否有隐藏 path 的 track。"""
+        for t in tracks:
+            if t.path_code in self._route_index.hidden_path_ids:
+                return True
+        return False
+
     def _at_station(self, stops: list[TrainStop], i: int, train_name: str) -> Optional[TrainPosition]:
-        """列车停在 stops[i]，取相邻 track 的本站端坐标，偏移到上/下行线"""
+        """列车停在 stops[i]，在对应图内 track 的站端坐标。"""
         label = stops[i].segment_train_no or train_name
         color = train_color(train_name)
         sign = _get_line_sign(label)
 
-        # 终到站：取上一段的最后一条 track 的终点
-        if i >= len(stops) - 1:
-            if i > 0:
-                tracks = self._seg_paths.get((train_name, i - 1))
-                if tracks:
-                    last_track = tracks[-1]
-                    is_forward = (stops[i].station_name == last_track.tail_station)
-                    if is_forward:
-                        x, y = last_track.x2, last_track.y2
-                    else:
-                        x, y = last_track.x1, last_track.y1
-                    dx, dy = _perpendicular_offset(last_track.angle_rad, sign)
-                    return TrainPosition(x=x + dx, y=y + dy, label=label, color=color,
-                                         label_flip=last_track.label_flip)
+        # 找到包含此站的匹配段（端站允许命中）
+        seg = self._find_containing_segment(train_name, i, inclusive_end=True)
+        if seg is None:
             return None
 
-        # 一般停站：取下一段的第一条 track 的本站端
-        tracks = self._seg_paths.get((train_name, i))
-        if not tracks:
+        route_id = seg['route_id']
+        is_seg_end = (i == seg['end_seq'])
+
+        if i >= len(stops) - 1 or is_seg_end:
+            # 终到站 或 匹配段末站：取上一段的末端 track
+            tracks = self._get_stop_pair_tracks(stops, i - 1, train_name, route_id)
+            if not tracks or self._on_hidden_path(tracks):
+                return None
+            last_track = tracks[-1]
+            if stops[i].station_name == last_track.tail_station:
+                x, y = last_track.x2, last_track.y2
+            else:
+                x, y = last_track.x1, last_track.y1
+            dx, dy = _perpendicular_offset(last_track.angle_rad, sign)
+            direction = last_track.up_direction if sign == 1 else last_track.down_direction
+            return TrainPosition(x=x + dx, y=y + dy, label=label, color=color,
+                                 direction=direction)
+
+        # 一般停站：取下一段的起始 track
+        tracks = self._get_stop_pair_tracks(stops, i, train_name, route_id)
+        if not tracks or self._on_hidden_path(tracks):
             return None
 
         first_track = tracks[0]
-        is_head = (stops[i].station_name == first_track.head_station)
-        if is_head:
+        if stops[i].station_name == first_track.head_station:
             x, y = first_track.x1, first_track.y1
         else:
             x, y = first_track.x2, first_track.y2
         dx, dy = _perpendicular_offset(first_track.angle_rad, sign)
+        direction = first_track.up_direction if sign == 1 else first_track.down_direction
 
         return TrainPosition(x=x + dx, y=y + dy, label=label, color=color,
-                             label_flip=first_track.label_flip)
+                             direction=direction)
+
+    # ── 区间运行定位 ────────────────────────────────────
 
     def _running(self, stops: list[TrainStop], i: int, train_name: str,
                  T: float, dep: int, arr: int) -> Optional[TrainPosition]:
-        """列车在 stops[i]→stops[i+1] 区间运行（可能跨多个 track），偏移到上/下行线"""
+        """列车在 stops[i]→stops[i+1] 区间运行。"""
         seg_dist = stops[i + 1].dist_km - stops[i].dist_km
         if seg_dist <= 0:
             return self._at_station(stops, i, train_name)
 
-        tracks = self._seg_paths.get((train_name, i))
-        if not tracks:
+        seg = self._find_containing_segment(train_name, i)
+        if seg is None:
+            return None
+
+        route_id = seg['route_id']
+        tracks = self._get_stop_pair_tracks(stops, i, train_name, route_id)
+        if not tracks or self._on_hidden_path(tracks):
             return None
 
         label = stops[i].segment_train_no or train_name
@@ -342,7 +540,7 @@ class TrainPositioner:
         time_ratio = (T - dep) / (arr - dep)
         traveled = time_ratio * seg_dist
 
-        # 沿 track 序列逐段定位，追踪进入每段的方向
+        # 沿 track 序列逐段定位
         entry_stn = stops[i].station_name
         acc = 0.0
         for ti, track in enumerate(tracks):
@@ -361,10 +559,11 @@ class TrainPositioner:
                 x = track.x1 + ratio * (track.x2 - track.x1)
                 y = track.y1 + ratio * (track.y2 - track.y1)
                 dx, dy = _perpendicular_offset(track.angle_rad, sign)
+                direction = track.up_direction if sign == 1 else track.down_direction
 
                 return TrainPosition(x=x + dx, y=y + dy, label=label,
                                      color=train_color(train_name),
-                                     label_flip=track.label_flip)
+                                     direction=direction)
 
             acc += tk_len
             entry_stn = exit_stn
@@ -372,12 +571,36 @@ class TrainPositioner:
         # fallback
         last_track = tracks[-1]
         dx, dy = _perpendicular_offset(last_track.angle_rad, sign)
+        direction = last_track.up_direction if sign == 1 else last_track.down_direction
         return TrainPosition(x=last_track.x2 + dx, y=last_track.y2 + dy,
                              label=label, color=train_color(train_name),
-                             label_flip=last_track.label_flip)
+                             direction=direction)
+
+    # ── 辅助 ────────────────────────────────────────────
+
+    def _find_containing_segment(self, train_name: str, stop_i: int,
+                                  inclusive_end: bool = False) -> Optional[dict]:
+        """找到包含 stop_i 的匹配段。inclusive_end=True 时允许端站命中。"""
+        for seg in self._matches.get(train_name, []):
+            end = seg['end_seq']
+            if inclusive_end:
+                if seg['start_seq'] <= stop_i <= end:
+                    return seg
+            else:
+                if seg['start_seq'] <= stop_i < end:
+                    return seg
+        return None
+
+    def _get_stop_pair_tracks(self, stops: list[TrainStop], i: int,
+                              train_name: str, route_id: int
+                              ) -> Optional[list[TrackInfo]]:
+        """获取两停站之间的全部 track 序列（含中间非停站的经由站）。"""
+        a = stops[i].station_name
+        b = stops[i + 1].station_name
+        return self._route_index.get_tracks_between(route_id, a, b)
 
     def visible_trains(self, minute: float) -> list[TrainPosition]:
-        """获取指定时刻所有可见列车位置"""
+        """获取指定时刻所有可见列车位置。"""
         result = []
         for train_name in self._trains:
             pos = self.position(train_name, minute)
@@ -450,6 +673,15 @@ class SimulationClock(QObject):
         self.current_minute = float(hour * 60)
         self.time_changed.emit(self.current_minute)
 
+    def step(self, minutes: int):
+        """步进 N 分钟（暂停时使用）"""
+        self.current_minute += minutes
+        while self.current_minute >= 1440.0:
+            self.current_minute -= 1440.0
+        while self.current_minute < 0.0:
+            self.current_minute += 1440.0
+        self.time_changed.emit(self.current_minute)
+
     def set_speed(self, speed: float):
         self.speed = speed
 
@@ -463,7 +695,7 @@ class TrainRenderer:
 
     @staticmethod
     def draw(painter, pos: TrainPosition):
-        """画一个列车：5px 实心圆 + 车次号（上行右上，下行左下）"""
+        """画一个列车：5px 实心圆 + 车次号（标签位置由轨道罗盘方向决定）"""
         painter.save()
 
         painter.setPen(QPen(Qt.GlobalColor.black, 1))
@@ -476,16 +708,33 @@ class TrainRenderer:
         painter.setPen(QPen(Qt.GlobalColor.black, 1))
         painter.setBrush(Qt.BrushStyle.NoBrush)
 
-        sign = _get_line_sign(pos.label)
-        # label_flip 反画时上下行标签位置互换
-        flip = pos.label_flip
-        if (sign == 1 and flip == 0) or (sign == -1 and flip == 1):
-            # 上行正画 / 下行反画 → 车次号在左下
-            tw = painter.fontMetrics().horizontalAdvance(pos.label)
-            fh = painter.fontMetrics().height()
-            painter.drawText(QPointF(pos.x - 7 - tw, pos.y + 7 + fh), pos.label)
+        tw = painter.fontMetrics().horizontalAdvance(pos.label)
+        fh = painter.fontMetrics().height()
+
+        # 标签位置：根据罗盘方向放置在圆点旁边
+        vec = DIRECTION_VECTORS.get(pos.direction, DIRECTION_VECTORS['N'])
+        dx, dy = vec[0], vec[1]
+        gap = 7  # 圆点边缘到标签的距离
+
+        # 锚点：从圆心沿方向偏移
+        ax = pos.x + dx * (5 + gap)
+        ay = pos.y + dy * (5 + gap)
+
+        # 根据方向分量对齐文字
+        if dx > 0.01:
+            lx = ax
+        elif dx < -0.01:
+            lx = ax - tw
         else:
-            # 上行反画 / 下行正画 → 车次号在右上
-            painter.drawText(QPointF(pos.x + 7, pos.y - 7), pos.label)
+            lx = ax - tw / 2
+
+        if dy > 0.01:
+            ly = ay
+        elif dy < -0.01:
+            ly = ay + fh / 3
+        else:
+            ly = ay + fh / 3
+
+        painter.drawText(QPointF(lx, ly), pos.label)
 
         painter.restore()

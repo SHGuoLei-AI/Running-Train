@@ -2,11 +2,13 @@ import json
 import os
 import shutil
 import sqlite3
+import locale
 from datetime import datetime
 from PySide6.QtWidgets import (QMainWindow, QMessageBox, QWidget, QLabel,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QHBoxLayout,
                                QPushButton, QLineEdit, QFileDialog, QScrollArea, QSplitter,
-                               QInputDialog)
+                               QInputDialog, QListWidget, QListWidgetItem, QDialog,
+                               QDialogButtonBox, QAbstractItemView)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from models import (TrainGraph, RailwayPath, RailwayTrack,
@@ -15,8 +17,12 @@ from models import (TrainGraph, RailwayPath, RailwayTrack,
                     list_graphs_in_db)
 from canvas import DrawingCanvas
 from delegates import RadioDelegate
-from simulation import SegmentIndex, TrainPositioner, SimulationClock
+from simulation import TrainPositioner, SimulationClock
 from sim_controls import SimulationControlPanel
+
+locale.setlocale(locale.LC_COLLATE, 'chs')  # pinyin sort for Chinese
+
+KL_PATH = os.path.join(os.path.dirname(__file__), 'data', 'kl.db')
 
 
 class MainWindow(QMainWindow):
@@ -133,6 +139,8 @@ class MainWindow(QMainWindow):
 
         self.path_btn_layout = QHBoxLayout()
         self.path_btn_layout.setContentsMargins(0, 0, 0, 0)
+        self.add_path_from_kl_button = QPushButton("  从客里表新增  ")
+        self.add_path_from_kl_button.clicked.connect(self.on_add_path_from_kl_clicked)
         self.add_path_button = QPushButton("  新增线路  ")
         self.add_path_button.clicked.connect(self.on_add_path_clicked)
         self.delete_path_button = QPushButton("  删除线路  ")
@@ -145,14 +153,15 @@ class MainWindow(QMainWindow):
         self.path_btn_layout.addStretch()
         self.path_btn_layout.addWidget(self.move_up_button)
         self.path_btn_layout.addWidget(self.move_down_button)
+        self.path_btn_layout.addWidget(self.add_path_from_kl_button)
         self.path_btn_layout.addWidget(self.add_path_button)
         self.path_btn_layout.addWidget(self.delete_path_button)
 
         self.rail_track_table = QTableWidget()
-        self.rail_track_table.setColumnCount(7)
+        self.rail_track_table.setColumnCount(8)
         self.rail_track_table.setHorizontalHeaderLabels(
-            ["画", "头站", "画", "尾站", "长度", "偏转", "反号"])
-        widths = [20, 80, 20, 80, 40, 30, 30]
+            ["画", "头站", "画", "尾站", "长度", "偏转", "上行方向", "下行方向"])
+        widths = [20, 80, 20, 80, 40, 30, 56, 56]
         for i, w in enumerate(widths):
             self.rail_track_table.setColumnWidth(i, w)
         self.rail_track_table.verticalHeader().setFixedWidth(24)
@@ -166,15 +175,18 @@ class MainWindow(QMainWindow):
 
         self.track_btn_layout = QHBoxLayout()
         self.track_btn_layout.setContentsMargins(0, 0, 0, 0)
+        self.extend_head_button = QPushButton("  头部延伸  ")
+        self.extend_head_button.clicked.connect(self.on_extend_head_clicked)
         self.insert_track_button = QPushButton("  插入区间  ")
         self.insert_track_button.clicked.connect(self.on_insert_track_clicked)
-        self.add_track_button = QPushButton("  新增区间  ")
-        self.add_track_button.clicked.connect(self.on_add_track_clicked)
+        self.extend_tail_button = QPushButton("  尾部延伸  ")
+        self.extend_tail_button.clicked.connect(self.on_add_track_clicked)
         self.delete_track_button = QPushButton("  删除区间  ")
         self.delete_track_button.clicked.connect(self.on_delete_track_clicked)
         self.track_btn_layout.addStretch()
+        self.track_btn_layout.addWidget(self.extend_head_button)
         self.track_btn_layout.addWidget(self.insert_track_button)
-        self.track_btn_layout.addWidget(self.add_track_button)
+        self.track_btn_layout.addWidget(self.extend_tail_button)
         self.track_btn_layout.addWidget(self.delete_track_button)
 
         self.data_panel = QWidget()
@@ -264,13 +276,22 @@ class MainWindow(QMainWindow):
         self.action_delete_backups.triggered.connect(self.on_delete_backups_clicked)
 
         # 控制面板 → 时钟
-        self._sim_panel.start_clicked.connect(self._sim_clock.start)
-        self._sim_panel.pause_clicked.connect(self._sim_clock.pause)
+        self._sim_panel.start_clicked.connect(self._on_start)
+        self._sim_panel.pause_clicked.connect(self._on_pause)
         self._sim_panel.hour_clicked.connect(self._sim_clock.jump_to)
         self._sim_panel.speed_changed.connect(self._sim_clock.set_speed)
+        self._sim_panel.step_minute.connect(self._sim_clock.step)
 
         # 时钟 → UI
         self._sim_clock.time_changed.connect(self._on_sim_tick)
+
+    def _on_start(self):
+        self._sim_clock.start()
+        self._sim_panel.set_running(True)
+
+    def _on_pause(self):
+        self._sim_clock.pause()
+        self._sim_panel.set_running(False)
 
     def on_update_schedule_clicked(self):
         QMessageBox.information(self, "更新时刻表",
@@ -417,12 +438,14 @@ class MainWindow(QMainWindow):
             self.canvas._update_size()
             self.update_graph_param_fields()
             self.canvas.update()
+            self._refresh_simulation()
 
     def on_scale_reset_clicked(self):
         self.train_graph.scale = self._original_scale
         self.canvas._update_size()
         self.update_graph_param_fields()
         self.canvas.update()
+        self._refresh_simulation()
 
     def on_scale_minus_clicked(self):
         if self.train_graph.scale > 1:
@@ -430,6 +453,7 @@ class MainWindow(QMainWindow):
             self.canvas._update_size()
             self.update_graph_param_fields()
             self.canvas.update()
+            self._refresh_simulation()
 
     # ── DB I/O ──────────────────────────────────────────
 
@@ -690,6 +714,188 @@ class MainWindow(QMainWindow):
             self.path_selected_label.setText(path.name)
             self.refresh_rail_track_table(row)
 
+    def on_add_path_from_kl_clicked(self):
+        """从客里表选择线路和首末站，新增线路（逐站生成区间）。"""
+        result = self._pick_kl_path_segment()
+        if result is None:
+            return
+
+        line_name, first_station, last_station = result
+
+        # 查kl获取首末站之间的所有车站（按里程排序）
+        kl = sqlite3.connect(KL_PATH)
+        try:
+            all_sts = kl.execute(
+                "SELECT station_name, dist_from_start FROM line_stations "
+                "WHERE line_name=? ORDER BY dist_from_start",
+                (line_name,)
+            ).fetchall()
+            fd = kl.execute(
+                "SELECT dist_from_start FROM line_stations WHERE line_name=? AND station_name=?",
+                (line_name, first_station)).fetchone()
+            ed = kl.execute(
+                "SELECT dist_from_start FROM line_stations WHERE line_name=? AND station_name=?",
+                (line_name, last_station)).fetchone()
+        finally:
+            kl.close()
+
+        if fd is None or ed is None:
+            return
+
+        f_dist = fd[0]
+        e_dist = ed[0]
+        forward = f_dist <= e_dist  # 正向：首站里程 ≤ 末站里程
+
+        # 筛选首末站之间的车站（含首末站），按方向排序
+        if forward:
+            stations = [(sn, d) for sn, d in all_sts if f_dist <= d <= e_dist]
+        else:
+            stations = [(sn, d) for sn, d in all_sts if e_dist <= d <= f_dist]
+            stations = list(reversed(stations))
+
+        if len(stations) < 2:
+            return
+
+        new_id = f"P{len(self.train_graph.train_paths) + 1}"
+        path = RailwayPath(new_id, line_name, 50, 50, angle=0, hidden=False,
+                           kl_line_name=line_name)
+
+        # 逐站生成区间（相邻两站一个 track）
+        for i in range(len(stations) - 1):
+            sn_a, da = stations[i]
+            sn_b, db = stations[i + 1]
+            seg_len = int(abs(db - da))
+            is_first = (i == 0)
+            is_last = (i == len(stations) - 2)
+            path.add_track(RailwayTrack(
+                length=seg_len, deflection=0,
+                head_station=sn_a, tail_station=sn_b,
+                draw_head=is_first, draw_tail=is_last))
+
+        self.train_graph.add_train_path(path)
+        new_row = len(self.train_graph.train_paths) - 1
+        self.train_path_table.blockSignals(True)
+        self.train_path_table.insertRow(new_row)
+        self._set_path_row(new_row, path)
+        self.train_path_table.blockSignals(False)
+        self.train_path_table.setCurrentCell(new_row, 1)
+        self.train_path_table.scrollToItem(self.train_path_table.item(new_row, 1))
+        self.canvas.update()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
+        self._refresh_simulation()
+
+    def _pick_kl_path_segment(self):
+        """弹窗：从客里表选线路 → 首站 → 末站（同线路）。
+        返回 (line_name, first_station, last_station) 或 None。"""
+        kl = sqlite3.connect(KL_PATH)
+        try:
+            lines = kl.execute(
+                "SELECT DISTINCT line_name FROM line_stations"
+            ).fetchall()
+            lines = sorted(lines, key=lambda x: locale.strxfrm(x[0]))
+        finally:
+            kl.close()
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("从客里表新增线路")
+        dlg.resize(520, 520)
+        layout = QVBoxLayout(dlg)
+
+        layout.addWidget(QLabel("注意：首站至末站需为下行方向！"))
+
+        layout.addWidget(QLabel("选择线路:"))
+
+        line_list = QListWidget()
+        for (ln,) in lines:
+            QListWidgetItem(ln, line_list)
+        layout.addWidget(line_list)
+
+        layout.addWidget(QLabel("选择首站:"))
+
+        first_list = QListWidget()
+        layout.addWidget(first_list)
+
+        layout.addWidget(QLabel("选择末站:"))
+
+        last_list = QListWidget()
+        layout.addWidget(last_list)
+
+        # Shared mutable state
+        state = {'all_sts': [], 'first_idx': None, '_updating': False}
+
+        def update_stations():
+            first_list.clear()
+            last_list.clear()
+            state['all_sts'] = []
+            state['first_idx'] = None
+
+            if line_list.currentItem() is None:
+                return
+            ln = line_list.currentItem().text()
+
+            kl2 = sqlite3.connect(KL_PATH)
+            try:
+                sts = kl2.execute(
+                    "SELECT station_name, dist_from_start FROM line_stations "
+                    "WHERE line_name=? ORDER BY dist_from_start",
+                    (ln,)
+                ).fetchall()
+            finally:
+                kl2.close()
+
+            state['all_sts'] = sts
+            for i, (sn, d) in enumerate(sts):
+                QListWidgetItem(f"{sn}  ({d:.0f}km)", first_list)
+
+        def on_first_changed(current, previous):
+            if state['_updating'] or current is None:
+                return
+            first_idx = first_list.row(current)
+            state['first_idx'] = first_idx
+
+            last_list.clear()
+            if first_idx < 0:
+                return
+
+            sts = state['all_sts']
+            # 列出该线路全部车站（不限制方向，末站可能在首站之前）
+            for i, (sn, d) in enumerate(sts):
+                QListWidgetItem(f"{sn}  ({d:.0f}km)", last_list)
+
+        line_list.currentItemChanged.connect(lambda: update_stations())
+
+        def on_line_changed():
+            update_stations()
+
+        line_list.currentItemChanged.connect(lambda cur, prev: on_line_changed())
+        first_list.currentItemChanged.connect(on_first_changed)
+
+        if line_list.count() > 0:
+            line_list.setCurrentRow(0)
+            update_stations()
+
+        btn_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btn_box.accepted.connect(dlg.accept)
+        btn_box.rejected.connect(dlg.reject)
+        layout.addWidget(btn_box)
+
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return None
+        if (line_list.currentItem() is None or
+                first_list.currentItem() is None or
+                last_list.currentItem() is None):
+            return None
+
+        ln = line_list.currentItem().text()
+        sn_text = first_list.currentItem().text()
+        en_text = last_list.currentItem().text()
+        first_stn = sn_text.split("  (")[0]
+        last_stn = en_text.split("  (")[0]
+
+        return (ln, first_stn, last_stn)
+
     def on_add_path_clicked(self):
         new_id = f"P{len(self.train_graph.train_paths) + 1}"
         path = RailwayPath(new_id, "新线路", 50, 50, angle=0, hidden=False)
@@ -777,11 +983,14 @@ class MainWindow(QMainWindow):
         self.rail_track_table.setItem(row, 3, QTableWidgetItem(track.tail_station))
         self.rail_track_table.setItem(row, 4, QTableWidgetItem(str(int(track.length))))
         self.rail_track_table.setItem(row, 5, QTableWidgetItem(str(int(track.deflection))))
-        chklf = QTableWidgetItem()
-        chklf.setFlags(Qt.ItemFlag.ItemIsEnabled)
-        chklf.setData(Qt.ItemDataRole.CheckStateRole,
-                      Qt.CheckState.Checked if getattr(track, 'label_flip', 0) else Qt.CheckState.Unchecked)
-        self.rail_track_table.setItem(row, 6, chklf)
+        # 上行方向（点击循环切换）
+        up_item = QTableWidgetItem(getattr(track, 'up_direction', 'N') or 'N')
+        up_item.setFlags(up_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.rail_track_table.setItem(row, 6, up_item)
+        # 下行方向（点击循环切换）
+        down_item = QTableWidgetItem(getattr(track, 'down_direction', 'S') or 'S')
+        down_item.setFlags(down_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.rail_track_table.setItem(row, 7, down_item)
 
     def on_track_item_changed(self, item):
         if self._refreshing:
@@ -813,8 +1022,6 @@ class MainWindow(QMainWindow):
             elif col == 5:  # deflection (geometry → sim refresh)
                 track.deflection = int(float(item.text().strip()))
                 needs_sim_refresh = True
-            elif col == 6:  # label_flip (cosmetic)
-                track.label_flip = 1 if (item.data(Qt.ItemDataRole.CheckStateRole) == Qt.CheckState.Checked) else 0
 
             if col in (4, 5):
                 for i in range(row + 1, len(path.tracks)):
@@ -829,15 +1036,72 @@ class MainWindow(QMainWindow):
         if needs_sim_refresh:
             self._refresh_simulation()
 
+    DIRECTION_CYCLE = ['N', 'E', 'S', 'W']
+
     def on_track_table_cell_clicked(self, row, col):
-        if col not in (0, 2, 6):
+        if col in (0, 2):
+            # 画头站/画尾站 checkbox
+            item = self.rail_track_table.item(row, col)
+            if not item:
+                return
+            current = item.data(Qt.ItemDataRole.CheckStateRole)
+            new_state = Qt.CheckState.Unchecked if current == Qt.CheckState.Checked else Qt.CheckState.Checked
+            item.setData(Qt.ItemDataRole.CheckStateRole, new_state)
+        elif col in (6, 7):
+            # 上行/下行方向：点击循环切换
+            item = self.rail_track_table.item(row, col)
+            if not item:
+                return
+            current = item.text()
+            try:
+                idx = self.DIRECTION_CYCLE.index(current)
+            except ValueError:
+                idx = 0
+            new_dir = self.DIRECTION_CYCLE[(idx + 1) % len(self.DIRECTION_CYCLE)]
+            item.setText(new_dir)
+            # 写入 track 对象
+            sel_row = self.train_path_table.currentRow()
+            if 0 <= sel_row < len(self.train_graph.train_paths):
+                path = self.train_graph.train_paths[sel_row]
+                if row < len(path.tracks):
+                    track = path.tracks[row]
+                    if col == 6:
+                        track.up_direction = new_dir
+                    else:
+                        track.down_direction = new_dir
+                    from models import save_train_graph_to_db
+                    save_train_graph_to_db(self.train_graph, self._db)
+                    self.canvas.update()
+                    self._refresh_simulation()
+
+    def on_extend_head_clicked(self):
+        """在第一个区间前插入新区间（头部延伸）。"""
+        sel_row = self.train_path_table.currentRow()
+        if sel_row < 0 or sel_row >= len(self.train_graph.train_paths):
             return
-        item = self.rail_track_table.item(row, col)
-        if not item:
+        path = self.train_graph.train_paths[sel_row]
+        if not path.tracks:
+            self.on_add_track_clicked()
             return
-        current = item.data(Qt.ItemDataRole.CheckStateRole)
-        new_state = Qt.CheckState.Unchecked if current == Qt.CheckState.Checked else Qt.CheckState.Checked
-        item.setData(Qt.ItemDataRole.CheckStateRole, new_state)
+
+        old_head = path.tracks[0].head_station
+        new_track = RailwayTrack(length=10, deflection=0, head_station="新头站", tail_station=old_head)
+        path.tracks.insert(0, new_track)
+
+        # 级联更新所有区间起点
+        for i in range(len(path.tracks)):
+            if i == 0:
+                path.tracks[i].start_point = path.start_point
+            else:
+                path.tracks[i].start_point = path.tracks[i - 1].end_point()
+
+        self.refresh_rail_track_table(sel_row)
+        self.refresh_train_path_table()
+        self.rail_track_table.setCurrentCell(0, 1)
+        self.canvas.update()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
+        self._refresh_simulation()
 
     def on_insert_track_clicked(self):
         sel_row = self.train_path_table.currentRow()
@@ -915,9 +1179,8 @@ class MainWindow(QMainWindow):
 
     def _init_simulation(self):
         """初始化模拟：构建索引、加载车次、以当前时间启动"""
-        seg_index = SegmentIndex.from_graph(self.train_graph)
         rt_path = os.path.join(os.path.dirname(__file__), 'data', 'rt.db')
-        self._positioner = TrainPositioner(rt_path, seg_index)
+        self._positioner = TrainPositioner(rt_path, self._db, self.train_graph)
 
         # 取系统当前时间
         now = datetime.now()
@@ -927,14 +1190,14 @@ class MainWindow(QMainWindow):
 
         # 启动时钟
         self._sim_clock.start()
+        self._sim_panel.set_running(True)
 
     def _refresh_simulation(self):
         """重建模拟索引（保留当前时间，用于 track 属性变更后刷新）"""
         if not self._positioner:
             return
-        seg_index = SegmentIndex.from_graph(self.train_graph)
         rt_path = os.path.join(os.path.dirname(__file__), 'data', 'rt.db')
-        self._positioner = TrainPositioner(rt_path, seg_index)
+        self._positioner = TrainPositioner(rt_path, self._db, self.train_graph)
         # 立即用当前时钟时间刷新列车位置
         self._on_sim_tick(self._sim_clock.current_minute)
 

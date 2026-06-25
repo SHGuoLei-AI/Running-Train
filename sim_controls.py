@@ -11,6 +11,7 @@ class SimulationControlPanel(QWidget):
     pause_clicked = Signal()
     hour_clicked = Signal(int)     # 0-23
     speed_changed = Signal(float)
+    step_minute = Signal(int)      # -10, -1, +1, +10
 
     SPEEDS = [0.5, 1.0, 2.0, 4.0, 8.0]
     SPEED_LABELS = ["½×", "1×", "2×", "4×", "8×"]
@@ -18,6 +19,7 @@ class SimulationControlPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedWidth(100)
+        self._running = False
         self._setup_ui()
         self._connect_signals()
 
@@ -58,38 +60,90 @@ class SimulationControlPanel(QWidget):
             self.__dict__[f'_btn_{h}'] = btn
         layout.addLayout(bot_grid)
 
-        # — 开始 / 暂停 —
+        # — 步进按钮：快退10 / 后退1 / 前进1 / 快进10 —
+        step_row = QHBoxLayout()
+        step_row.setSpacing(2)
+
+        self.step_back_10_btn = QPushButton("⏪10")
+        self.step_back_10_btn.setFixedHeight(20)
+        self.step_back_10_btn.setStyleSheet("font-size: 8px; padding: 1px;")
+        step_row.addWidget(self.step_back_10_btn)
+
+        self.step_back_1_btn = QPushButton("◀1")
+        self.step_back_1_btn.setFixedHeight(20)
+        self.step_back_1_btn.setStyleSheet("font-size: 8px; padding: 1px;")
+        step_row.addWidget(self.step_back_1_btn)
+
+        self.step_fwd_1_btn = QPushButton("1▶")
+        self.step_fwd_1_btn.setFixedHeight(20)
+        self.step_fwd_1_btn.setStyleSheet("font-size: 8px; padding: 1px;")
+        step_row.addWidget(self.step_fwd_1_btn)
+
+        self.step_fwd_10_btn = QPushButton("10⏩")
+        self.step_fwd_10_btn.setFixedHeight(20)
+        self.step_fwd_10_btn.setStyleSheet("font-size: 8px; padding: 1px;")
+        step_row.addWidget(self.step_fwd_10_btn)
+
+        layout.addLayout(step_row)
+
+        # — 开始/暂停 + 速度（同一行，各半宽）—
         ctrl_row = QHBoxLayout()
         ctrl_row.setSpacing(2)
-        self.start_btn = QPushButton("▶")
-        self.start_btn.setFixedHeight(20)
-        self.start_btn.setStyleSheet("font-size: 9px; padding: 1px;")
-        ctrl_row.addWidget(self.start_btn)
 
-        self.pause_btn = QPushButton("⏸")
-        self.pause_btn.setFixedHeight(20)
-        self.pause_btn.setStyleSheet("font-size: 9px; padding: 1px;")
-        ctrl_row.addWidget(self.pause_btn)
-        layout.addLayout(ctrl_row)
+        self.toggle_btn = QPushButton("▶")
+        self.toggle_btn.setFixedHeight(22)
+        self._update_toggle_style()
+        ctrl_row.addWidget(self.toggle_btn, stretch=1)
 
-        # — 速度 —
         self.speed_combo = QComboBox()
+        self.speed_combo.setEditable(True)
+        self.speed_combo.lineEdit().setReadOnly(True)
+        self.speed_combo.lineEdit().setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.speed_combo.addItems(self.SPEED_LABELS)
         self.speed_combo.setCurrentIndex(1)
-        self.speed_combo.setStyleSheet("font-size: 8px; padding: 1px;")
-        layout.addWidget(self.speed_combo)
-
+        self.speed_combo.setFixedHeight(22)
+        self.speed_combo.setStyleSheet(
+            "QComboBox { font-size: 9px; padding: 0px 2px; color: black; background: white; }"
+            "QComboBox QAbstractItemView { font-size: 9px; }"
+            "QComboBox::drop-down { width: 12px; }")
+        ctrl_row.addWidget(self.speed_combo, stretch=1)
+        layout.addLayout(ctrl_row)
         layout.addStretch()
 
+    def _update_toggle_style(self):
+        if self._running:
+            self.toggle_btn.setText("⏸")
+            self.toggle_btn.setStyleSheet(
+                "font-size: 11px; padding: 1px; color: #1565C0; font-weight: bold;")
+        else:
+            self.toggle_btn.setText("▶")
+            self.toggle_btn.setStyleSheet(
+                "font-size: 14px; padding: 1px; color: #C62828; font-weight: bold;")
+
     def _connect_signals(self):
-        self.start_btn.clicked.connect(self.start_clicked.emit)
-        self.pause_btn.clicked.connect(self.pause_clicked.emit)
+        self.toggle_btn.clicked.connect(self._on_toggle)
 
         for h in range(24):
             btn = self.__dict__[f'_btn_{h}']
             btn.clicked.connect(lambda checked, h=h: self.hour_clicked.emit(h))
 
         self.speed_combo.currentIndexChanged.connect(self._on_speed_changed)
+
+        self.step_back_10_btn.clicked.connect(lambda: self.step_minute.emit(-10))
+        self.step_back_1_btn.clicked.connect(lambda: self.step_minute.emit(-1))
+        self.step_fwd_1_btn.clicked.connect(lambda: self.step_minute.emit(1))
+        self.step_fwd_10_btn.clicked.connect(lambda: self.step_minute.emit(10))
+
+    def _on_toggle(self):
+        if self._running:
+            self.pause_clicked.emit()
+        else:
+            self.start_clicked.emit()
+
+    def set_running(self, running: bool):
+        """更新按钮状态（由外部时钟状态驱动）"""
+        self._running = running
+        self._update_toggle_style()
 
     def _on_speed_changed(self, idx: int):
         if 0 <= idx < len(self.SPEEDS):
