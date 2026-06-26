@@ -13,9 +13,9 @@ DOWN_LINE_COLOR = QColor(200, 255, 200)
 class DrawingCanvas(QWidget):
     """自定义绘制画布"""
 
-    NEARBY_THRESHOLD = 15  # 像素，判定"靠近"端点的距离
+    NEARBY_THRESHOLD = 15  # 像素，判定"靠近"端点/列车的距离
 
-    mouse_status = Signal(str)  # 格式化状态文本
+    mouse_status = Signal(str)  # 格式化状态文本（末尾可含 |||train_name|||）
 
     def __init__(self, train_graph, parent=None):
         super().__init__(parent)
@@ -30,7 +30,7 @@ class DrawingCanvas(QWidget):
         self.update()
 
     def mouseMoveEvent(self, event):
-        """跟踪鼠标位置，查找附近端点，发射状态文本"""
+        """跟踪鼠标位置，查找附近端点或列车，发射状态文本"""
         scale = self.train_graph.scale
         px = event.position().x()
         py = event.position().y()
@@ -44,8 +44,25 @@ class DrawingCanvas(QWidget):
         else:
             status = f" X：{km_x:.0f} km，Y：{km_y:.0f} km"
 
+        # 检查鼠标是否靠近某个列车圆
+        train_name = self._find_nearby_train(px, py)
+        if train_name:
+            status += f" |||{train_name}|||"
+
         self.mouse_status.emit(status)
         super().mouseMoveEvent(event)
+
+    def _find_nearby_train(self, px: float, py: float) -> str | None:
+        """查找鼠标像素坐标附近最近的列车圆点。
+        返回 train_name 或 None。"""
+        best_dist = self.NEARBY_THRESHOLD
+        best: str | None = None
+        for pos in self._train_positions:
+            d = math.hypot(px - pos.x, py - pos.y)
+            if d < best_dist:
+                best_dist = d
+                best = pos.train_name or pos.label
+        return best
 
     def _find_nearby_station(self, px: float, py: float) -> tuple | None:
         """查找鼠标像素坐标附近最近的 track 端点。

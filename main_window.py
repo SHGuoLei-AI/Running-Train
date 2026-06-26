@@ -1473,6 +1473,16 @@ class MainWindow(QMainWindow):
         rt_path = config.get_rt_path()
         self._positioner = TrainPositioner(rt_path, self._db, self.train_graph)
 
+        # 缓存车次→起讫站映射（用于状态栏悬停提示）
+        self._train_info: dict[str, tuple[str, str]] = {}
+        try:
+            rows = self._db.execute(
+                'SELECT train_name, from_station, to_station FROM region_trains'
+            ).fetchall()
+            self._train_info = {r[0]: (r[1], r[2]) for r in rows}
+        except Exception:
+            pass
+
         # 设置默认速度
         default_speed = config.get_default_speed()
         try:
@@ -1517,7 +1527,19 @@ class MainWindow(QMainWindow):
     # ── 状态栏 ──────────────────────────────────────────
 
     def _on_canvas_mouse_status(self, text: str):
-        self._status_label.setText(text)
+        # 解析列车悬停信息（格式： ...  |||train_name|||）
+        if '|||' in text:
+            parts = text.split('|||')
+            base = parts[0]
+            train_name = parts[1] if len(parts) > 1 else ''
+            info = self._train_info.get(train_name, (None, None))
+            if info[0] and info[1]:
+                base += f'  [{train_name}，{info[0]} -- {info[1]}]'
+            else:
+                base += f'  [{train_name}]'
+            self._status_label.setText(base)
+        else:
+            self._status_label.setText(text)
 
     # ── 辅助方法 ─────────────────────────────────────────
 

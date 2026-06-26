@@ -67,7 +67,8 @@ class TrainPosition:
     y: float
     label: str      # 显示用的车次号
     color: QColor
-    direction: str = "N"  # 标签罗盘方向（N/S/E/W/NE/NW/SE/SW）
+    direction: str = "N"  # 标签罗盘方向（N/S/E/W）
+    train_name: str = ""  # 完整车次名（如 C801/C804）
 
 
 # ——————————————————————————————————————
@@ -524,7 +525,7 @@ class TrainPositioner:
             dx, dy = _perpendicular_offset(last_track.angle_rad, p_sign)
             direction = _label_direction(last_track.angle_rad, p_sign)
             return TrainPosition(x=x + dx, y=y + dy, label=label, color=color,
-                                 direction=direction)
+                                 direction=direction, train_name=train_name)
 
         # 一般停站：取下一段的起始 track
         tracks = self._get_stop_pair_tracks(stops, i, train_name, route_id)
@@ -545,7 +546,7 @@ class TrainPositioner:
         direction = _label_direction(first_track.angle_rad, p_sign)
 
         return TrainPosition(x=x + dx, y=y + dy, label=label, color=color,
-                             direction=direction)
+                             direction=direction, train_name=train_name)
 
     # ── 区间运行定位 ────────────────────────────────────
 
@@ -603,7 +604,7 @@ class TrainPositioner:
 
                 return TrainPosition(x=x + dx, y=y + dy, label=label,
                                      color=train_color(train_name),
-                                     direction=direction)
+                                     direction=direction, train_name=train_name)
 
             acc += tk_len
             entry_stn = exit_stn
@@ -617,7 +618,7 @@ class TrainPositioner:
         direction = _label_direction(last_track.angle_rad, p_sign)
         return TrainPosition(x=last_track.x2 + dx, y=last_track.y2 + dy,
                              label=label, color=train_color(train_name),
-                             direction=direction)
+                             direction=direction, train_name=train_name)
 
     # ── 辅助 ────────────────────────────────────────────
 
