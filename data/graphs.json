@@ -4,13 +4,15 @@
             "id": "xinjiang",
             "name": "新疆区域",
             "rg_db": "data/rg.db",
-            "rt_db": "data/rt.db"
+            "rt_db": "data/rt.db",
+            "default_speed": 8.0
         },
         {
             "id": "shanghai",
             "name": "上海区域",
             "rg_db": "data/rg-shanghai.db",
-            "rt_db": "data/rt-shanghai.db"
+            "rt_db": "data/rt-shanghai.db",
+            "default_speed": 1.0
         }
     ],
     "active": "xinjiang"

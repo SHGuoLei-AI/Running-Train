@@ -74,3 +74,9 @@ def set_active_graph(graph_id: str):
     cfg = load_graphs()
     cfg['active'] = graph_id
     save_graphs(cfg)
+
+
+def get_default_speed() -> float:
+    """当前激活图的默认速度。"""
+    g = get_active_graph()
+    return float(g.get('default_speed', 1.0))

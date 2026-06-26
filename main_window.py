@@ -51,6 +51,11 @@ class MainWindow(QMainWindow):
         self.canvas_widget = QWidget()
         central_layout.addWidget(self.canvas_widget, stretch=1)
 
+        # 状态栏
+        self._status_bar = self.statusBar()
+        self._status_label = QLabel("")
+        self._status_bar.addWidget(self._status_label)
+
         # 菜单栏
         self.menu_file = self.menuBar().addMenu("文件(&F)")
         self.menu_graph = self.menuBar().addMenu("图(&G)")
@@ -184,19 +189,22 @@ class MainWindow(QMainWindow):
 
         self.track_btn_layout = QHBoxLayout()
         self.track_btn_layout.setContentsMargins(0, 0, 0, 0)
+        self.delete_head_button = QPushButton("  删除头部  ")
+        self.delete_head_button.clicked.connect(self.on_delete_head_clicked)
         self.extend_head_button = QPushButton("  头部延伸  ")
         self.extend_head_button.clicked.connect(self.on_extend_head_clicked)
         self.insert_track_button = QPushButton("  插入区间  ")
         self.insert_track_button.clicked.connect(self.on_insert_track_clicked)
         self.extend_tail_button = QPushButton("  尾部延伸  ")
         self.extend_tail_button.clicked.connect(self.on_add_track_clicked)
-        self.delete_track_button = QPushButton("  删除区间  ")
-        self.delete_track_button.clicked.connect(self.on_delete_track_clicked)
+        self.delete_tail_button = QPushButton("  删除尾部  ")
+        self.delete_tail_button.clicked.connect(self.on_delete_tail_clicked)
         self.track_btn_layout.addStretch()
+        self.track_btn_layout.addWidget(self.delete_head_button)
         self.track_btn_layout.addWidget(self.extend_head_button)
         self.track_btn_layout.addWidget(self.insert_track_button)
         self.track_btn_layout.addWidget(self.extend_tail_button)
-        self.track_btn_layout.addWidget(self.delete_track_button)
+        self.track_btn_layout.addWidget(self.delete_tail_button)
 
         self.data_panel = QWidget()
         data_layout = QVBoxLayout(self.data_panel)
@@ -208,10 +216,13 @@ class MainWindow(QMainWindow):
         data_layout.addWidget(self.rail_track_table, stretch=1)
         data_layout.addLayout(self.track_btn_layout)
 
-        self._original_scale = self.train_graph.scale
+        self._default_scale = getattr(self.train_graph, 'default_scale', self.train_graph.scale) or self.train_graph.scale
+        self.scale_label = QLabel(f" {self.train_graph.scale}× ")
+        self.scale_label.setStyleSheet("font-size: 9px; border: none;")
         self.scale_plus_btn = QPushButton(" + ")
         self.scale_plus_btn.clicked.connect(self.on_scale_plus_clicked)
         self.scale_reset_btn = QPushButton(" # ")
+        self.scale_reset_btn.setToolTip(f"重置为默认比例尺 {self._default_scale}×")
         self.scale_reset_btn.clicked.connect(self.on_scale_reset_clicked)
         self.scale_minus_btn = QPushButton(" - ")
         self.scale_minus_btn.clicked.connect(self.on_scale_minus_clicked)
@@ -221,6 +232,7 @@ class MainWindow(QMainWindow):
         scale_btn_row = QHBoxLayout()
         scale_btn_row.setContentsMargins(0, 0, 0, 0)
         scale_btn_row.addStretch()
+        scale_btn_row.addWidget(self.scale_label)
         scale_btn_row.addWidget(self.scale_plus_btn)
         scale_btn_row.addWidget(self.scale_reset_btn)
         scale_btn_row.addWidget(self.scale_minus_btn)
@@ -371,7 +383,7 @@ class MainWindow(QMainWindow):
     # ── 图切换 ──────────────────────────────────────────
 
     def _build_graph_menu(self):
-        """构建图切换菜单（radio-action 样式）。"""
+        """构建图切换菜单（radio-action 样式 + 导入车次）。"""
         self.menu_graph.clear()
         self._graph_actions.clear()
         graphs = config.load_graphs().get('graphs', [])
@@ -383,6 +395,9 @@ class MainWindow(QMainWindow):
                 action.setChecked(True)
             action.triggered.connect(lambda checked, gid=g['id']: self._on_switch_graph(gid))
             self._graph_actions[g['id']] = action
+        self.menu_graph.addSeparator()
+        self.action_import_trains = self.menu_graph.addAction("导入车次...")
+        self.action_import_trains.triggered.connect(self._on_import_trains)
 
     def _on_switch_graph(self, graph_id: str):
         """切换激活图并重新加载。"""
@@ -397,9 +412,107 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"Running Train — {config.get_active_graph().get('name', '')}")
         # 重新加载
         self._load_from_db()
+        # 应用默认速度
+        default_speed = config.get_default_speed()
+        try:
+            idx = self._sim_panel.SPEEDS.index(default_speed)
+        except ValueError:
+            idx = 1
+        self._sim_panel.speed_combo.setCurrentIndex(idx)
+        self._sim_clock.set_speed(default_speed)
         # 重建模拟
         self._refresh_simulation()
         self._build_graph_menu()
+
+    def _on_import_trains(self):
+        """从时刻表（cc.db）导入经过本图车站的所有车次到 rt.db。"""
+        # 1. 收集本图所有车站
+        graph_stations = set()
+        for path in self.train_graph.train_paths:
+            for track in path.tracks:
+                if track.head_station:
+                    graph_stations.add(track.head_station)
+                if track.tail_station:
+                    graph_stations.add(track.tail_station)
+        if not graph_stations:
+            QMessageBox.information(self, "导入车次", "当前图中没有任何车站。\n请先在 track 表中添加车站。")
+            return
+
+        # 2. 从 cc.db 查出经过这些车站的所有车次
+        cc_path = os.path.join(os.path.dirname(__file__), 'data', 'cc.db')
+        cc = sqlite3.connect(cc_path)
+
+        placeholders = ','.join('?' * len(graph_stations))
+        train_rows = cc.execute(
+            f'SELECT DISTINCT t.train_index, t.train_name, t.from_station, t.to_station '
+            f'FROM trains t JOIN train_stops ts ON t.train_index = ts.train_index '
+            f'WHERE ts.station_name IN ({placeholders}) '
+            f'ORDER BY t.train_name',
+            list(graph_stations)
+        ).fetchall()
+
+        if not train_rows:
+            cc.close()
+            QMessageBox.information(self, "导入车次", "时刻表中没有找到经过本图车站的车次。")
+            return
+
+        # 3. 获取所有车次的完整停站
+        train_indices = [r[0] for r in train_rows]
+
+        # 分批查询（避免 SQL 参数过多）
+        BATCH = 500
+        stop_rows = []
+        for b in range(0, len(train_indices), BATCH):
+            batch = train_indices[b:b + BATCH]
+            ph = ','.join('?' * len(batch))
+            rows = cc.execute(
+                f'SELECT t.train_name, ts.stop_seq, ts.station_name, '
+                f'ts.arrive_time, ts.depart_time, ts.distance_km, ts.segment_train_no '
+                f'FROM trains t JOIN train_stops ts ON t.train_index = ts.train_index '
+                f'WHERE t.train_index IN ({ph}) '
+                f'ORDER BY t.train_index, ts.stop_seq',
+                batch
+            ).fetchall()
+            stop_rows.extend(rows)
+
+        # 获取 cc 版本号
+        cc_version = cc.execute('SELECT value FROM meta WHERE key="version"').fetchone()
+        cc.close()
+
+        # 4. 写入 rt.db
+        rt_path = config.get_rt_path()
+        rt = sqlite3.connect(rt_path)
+        rt.execute('DELETE FROM train_route_matches')  # 旧的匹配结果失效
+        rt.execute('DELETE FROM train_stops')
+        rt.execute('DELETE FROM region_trains')
+
+        rt.executemany(
+            'INSERT INTO region_trains (train_name, from_station, to_station) VALUES (?,?,?)',
+            [(r[1], r[2], r[3]) for r in train_rows]
+        )
+        rt.executemany(
+            'INSERT INTO train_stops (train_name, stop_seq, station_name, arrive_time, depart_time, distance_km, segment_train_no) '
+            'VALUES (?,?,?,?,?,?,?)',
+            stop_rows
+        )
+
+        # 更新 meta
+        if cc_version:
+            rt.execute('INSERT OR REPLACE INTO meta VALUES (?,?)', ('cc_version', cc_version[0]))
+        rt.commit()
+        rt.close()
+
+        # 5. 刷新匹配
+        self._refresh_simulation()
+
+        QMessageBox.information(
+            self, "导入车次",
+            f"导入完成！\n\n"
+            f"图内车站：{len(graph_stations)} 个\n"
+            f"导入车次：{len(train_rows)} 趟\n"
+            f"总停站记录：{len(stop_rows)} 条\n\n"
+            f"旧的匹配结果已清空，请运行「经由 → 车次匹配」重新匹配。"
+        )
 
     def on_delete_backups_clicked(self):
         """Dialog to select and delete backup files."""
@@ -487,33 +600,32 @@ class MainWindow(QMainWindow):
     def on_scale_plus_clicked(self):
         if self.train_graph.scale < 10:
             self.train_graph.scale += 1
-            self.canvas._update_size()
-            self.update_graph_param_fields()
-            self.canvas.update()
-            self._refresh_simulation()
+            self._on_scale_changed()
 
     def on_scale_reset_clicked(self):
-        self.train_graph.scale = self._original_scale
+        self.train_graph.scale = self._default_scale
+        self._on_scale_changed()
+
+    def on_scale_minus_clicked(self):
+        if self.train_graph.scale > 1:
+            self.train_graph.scale -= 1
+            self._on_scale_changed()
+
+    def _on_scale_changed(self):
+        self.scale_label.setText(f" {self.train_graph.scale}× ")
         self.canvas._update_size()
         self.update_graph_param_fields()
         self.canvas.update()
         self._refresh_simulation()
 
-    def on_scale_minus_clicked(self):
-        if self.train_graph.scale > 1:
-            self.train_graph.scale -= 1
-            self.canvas._update_size()
-            self.update_graph_param_fields()
-            self.canvas.update()
-            self._refresh_simulation()
-
     # ── DB I/O ──────────────────────────────────────────
 
     def _load_from_db(self, graph_name=None):
-        self.train_graph = load_train_graph_from_db(self._db)  # graph_name no longer used
+        self.train_graph = load_train_graph_from_db(self._db)
         self._current_graph_name = self.train_graph.name
-        self._original_scale = self.train_graph.scale
+        self._default_scale = getattr(self.train_graph, 'default_scale', self.train_graph.scale) or self.train_graph.scale
         self.canvas = DrawingCanvas(self.train_graph)
+        self.canvas.mouse_status.connect(self._on_canvas_mouse_status)
         if hasattr(self, 'scroll_area'):
             self.scroll_area.setWidget(self.canvas)
 
@@ -665,6 +777,8 @@ class MainWindow(QMainWindow):
         self.graph_length_field.setText(str(int(self.train_graph.length)))
         self.graph_width_field.setText(str(int(self.train_graph.width)))
         self.graph_scale_field.setText(str(int(self.train_graph.scale)))
+        if hasattr(self, 'scale_label'):
+            self.scale_label.setText(f" {self.train_graph.scale}× ")
 
     def on_graph_params_changed(self):
         try:
@@ -1210,7 +1324,29 @@ class MainWindow(QMainWindow):
         save_train_graph_to_db(self.train_graph, self._db)
         self._refresh_simulation()
 
-    def on_delete_track_clicked(self):
+    def on_delete_head_clicked(self):
+        """删除当前选中 path 的第一个 track（头部）。"""
+        sel_row = self.train_path_table.currentRow()
+        if sel_row < 0 or sel_row >= len(self.train_graph.train_paths):
+            return
+        path = self.train_graph.train_paths[sel_row]
+        if not path.tracks:
+            return
+        # 删除第一个 track，path 起点移到下一个 track 的 head
+        removed = path.tracks.pop(0)
+        if path.tracks:
+            path.start_point = path.tracks[0].start_point
+        else:
+            path.start_point = removed.end_point()  # 空 path 时起点移到原尾部
+        self.refresh_rail_track_table(sel_row)
+        self.refresh_train_path_table()
+        self.canvas.update()
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
+        self._refresh_simulation()
+
+    def on_delete_tail_clicked(self):
+        """删除当前选中 path 的最后一个 track（尾部）。"""
         sel_row = self.train_path_table.currentRow()
         if sel_row < 0 or sel_row >= len(self.train_graph.train_paths):
             return
@@ -1218,9 +1354,7 @@ class MainWindow(QMainWindow):
         if not path.tracks:
             return
         del path.tracks[-1]
-        self.rail_track_table.blockSignals(True)
-        self.rail_track_table.removeRow(self.rail_track_table.rowCount() - 1)
-        self.rail_track_table.blockSignals(False)
+        self.refresh_rail_track_table(sel_row)
         self.refresh_train_path_table()
         self.canvas.update()
         from models import save_train_graph_to_db
@@ -1233,6 +1367,15 @@ class MainWindow(QMainWindow):
         """初始化模拟：构建索引、加载车次、以当前时间启动"""
         rt_path = config.get_rt_path()
         self._positioner = TrainPositioner(rt_path, self._db, self.train_graph)
+
+        # 设置默认速度
+        default_speed = config.get_default_speed()
+        try:
+            idx = self._sim_panel.SPEEDS.index(default_speed)
+        except ValueError:
+            idx = 1  # fallback to 1×
+        self._sim_panel.speed_combo.setCurrentIndex(idx)
+        self._sim_clock.set_speed(default_speed)
 
         # 取系统当前时间
         now = datetime.now()
@@ -1265,6 +1408,11 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_db') and self._db:
             self._db.close()
         super().closeEvent(event)
+
+    # ── 状态栏 ──────────────────────────────────────────
+
+    def _on_canvas_mouse_status(self, text: str):
+        self._status_label.setText(text)
 
     # ── 辅助方法 ─────────────────────────────────────────
 
