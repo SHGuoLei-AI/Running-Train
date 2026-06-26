@@ -171,12 +171,19 @@ def load_train_graph_from_db(db, graph_name=None):
     conn, own = _resolve_db(db)
     try:
         g = conn.execute(
-            'SELECT name, length, width, scale, default_scale, default_speed FROM train_graph LIMIT 1').fetchone()
+            'SELECT name, length, width, scale, default_scale, default_speed, '
+            'rg_version, kl_version, cc_version, author '
+            'FROM train_graph LIMIT 1').fetchone()
         if not g:
             raise ValueError('No train_graph found in database')
-        train_graph = TrainGraph(name=g[0], length=g[1], width=g[2], scale=g[3],
-                                 default_scale=g[4] if g[4] is not None else g[3],
-                                 default_speed=g[5] if len(g) > 5 and g[5] is not None else 1.0)
+        train_graph = TrainGraph(
+            name=g[0], length=g[1], width=g[2], scale=g[3],
+            default_scale=g[4] if g[4] is not None else g[3],
+            default_speed=g[5] if g[5] is not None else 1.0,
+            rg_version=g[6] if len(g) > 6 and g[6] is not None else 1,
+            kl_version=g[7] if len(g) > 7 and g[7] is not None else '',
+            cc_version=g[8] if len(g) > 8 and g[8] is not None else '',
+            author=g[9] if len(g) > 9 and g[9] is not None else '')
 
         paths = conn.execute(
             'SELECT id, name, kl_line_name, start_x, start_y, angle, hidden '
@@ -229,11 +236,17 @@ def save_train_graph_to_db(train_graph, db):
         conn.execute('DELETE FROM railway_path')
 
         conn.execute(
-            'INSERT OR REPLACE INTO train_graph (name, length, width, scale, default_scale, default_speed) '
-            'VALUES (?,?,?,?,?,?)',
+            'INSERT OR REPLACE INTO train_graph '
+            '(name, length, width, scale, default_scale, default_speed, '
+            'rg_version, kl_version, cc_version, author) '
+            'VALUES (?,?,?,?,?,?,?,?,?,?)',
             (train_graph.name, train_graph.length, train_graph.width, train_graph.scale,
              getattr(train_graph, 'default_scale', train_graph.scale) or train_graph.scale,
-             getattr(train_graph, 'default_speed', 1.0) or 1.0))
+             getattr(train_graph, 'default_speed', 1.0) or 1.0,
+             getattr(train_graph, 'rg_version', 1) or 1,
+             getattr(train_graph, 'kl_version', '') or '',
+             getattr(train_graph, 'cc_version', '') or '',
+             getattr(train_graph, 'author', '') or ''))
 
         for sort_order, path in enumerate(train_graph.train_paths):
             kl = getattr(path, 'kl_line_name', '') or ''

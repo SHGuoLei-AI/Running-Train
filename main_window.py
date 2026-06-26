@@ -295,22 +295,10 @@ class MainWindow(QMainWindow):
         return d
 
     def _get_auto_backup(self):
-        try:
-            row = self._db.execute(
-                "SELECT value FROM meta WHERE key='auto_backup'").fetchone()
-            if row is None:
-                # 首次使用默认开启
-                self._set_auto_backup(True)
-                return True
-            return row[0] == '1'
-        except Exception:
-            return True  # 出错时也默认开启
+        return config.get_auto_backup()
 
     def _set_auto_backup(self, enabled):
-        self._db.execute(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES ('auto_backup', ?)",
-            ('1' if enabled else '0',))
-        self._db.commit()
+        config.set_auto_backup(enabled)
 
     def _do_backup(self):
         """Copy all DBs to backup dir with timestamp."""
@@ -458,9 +446,11 @@ class MainWindow(QMainWindow):
         import sqlite3
         conn = sqlite3.connect(rg_path)
         conn.executescript('''
-            CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
             CREATE TABLE train_graph (name TEXT PRIMARY KEY, length INTEGER, width INTEGER,
-                scale INTEGER DEFAULT 1, default_scale INTEGER DEFAULT 1);
+                scale INTEGER DEFAULT 1, default_scale INTEGER DEFAULT 1,
+                default_speed REAL DEFAULT 1.0, rg_version INTEGER DEFAULT 1,
+                kl_version TEXT DEFAULT '', cc_version TEXT DEFAULT '',
+                author TEXT DEFAULT '');
             CREATE TABLE railway_path (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
                 kl_line_name TEXT, start_x INTEGER, start_y INTEGER, angle INTEGER DEFAULT 0,
                 hidden INTEGER DEFAULT 0, sort_order INTEGER DEFAULT 0);
@@ -478,12 +468,7 @@ class MainWindow(QMainWindow):
                 route_id INTEGER REFERENCES routes(id), seq INTEGER NOT NULL,
                 station_name TEXT NOT NULL, line_name TEXT NOT NULL, cum_distance INTEGER DEFAULT 0,
                 is_junction INTEGER DEFAULT 0);
-            INSERT INTO meta VALUES ('author','');
-            INSERT INTO meta VALUES ('version','1');
-            INSERT INTO meta VALUES ('kl_version','');
-            INSERT INTO meta VALUES ('cc_version','');
-            INSERT INTO meta VALUES ('auto_backup','1');
-            INSERT INTO train_graph VALUES (?, 1000, 600, 1, 1, 1.0);
+            INSERT INTO train_graph VALUES (?, 1000, 600, 1, 1, 1.0, 1, '', '', '');
         ''', (gid,))
         conn.commit()
         conn.close()
@@ -646,9 +631,12 @@ class MainWindow(QMainWindow):
             stop_rows
         )
 
-        # 更新 meta
+        # 更新版本号
         if cc_version:
             rt.execute('INSERT OR REPLACE INTO meta VALUES (?,?)', ('cc_version', cc_version[0]))
+            # 同步更新 rg.db train_graph
+            self._db.execute('UPDATE train_graph SET cc_version=?', (cc_version[0],))
+            self._db.commit()
         rt.commit()
         rt.close()
 

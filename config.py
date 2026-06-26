@@ -5,6 +5,34 @@ import sqlite3
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 GRAPHS_CONFIG = os.path.join(BASE_DIR, 'data', 'graphs.json')
+SETUP_CONFIG = os.path.join(BASE_DIR, 'data', 'setup.json')
+
+
+# ── setup.json — 全局设置（与图无关）──────────────────────
+
+def load_setup() -> dict:
+    if os.path.exists(SETUP_CONFIG):
+        with open(SETUP_CONFIG, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def save_setup(data: dict):
+    with open(SETUP_CONFIG, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+
+def get_auto_backup() -> bool:
+    return load_setup().get('auto_backup', True)
+
+
+def set_auto_backup(enabled: bool):
+    data = load_setup()
+    data['auto_backup'] = enabled
+    save_setup(data)
+
+
+# ── graphs.json — 图列表配置 ─────────────────────────────
 
 
 def _resolve(path: str) -> str:
