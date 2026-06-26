@@ -13,8 +13,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from models import (TrainGraph, RailwayPath, RailwayTrack,
                     load_train_graph_from_json, save_train_graph_to_json,
-                    load_train_graph_from_db, save_train_graph_to_db,
-                    list_graphs_in_db)
+                    load_train_graph_from_db, save_train_graph_to_db)
 from canvas import DrawingCanvas
 from delegates import RadioDelegate
 from simulation import TrainPositioner, SimulationClock
@@ -778,45 +777,6 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'canvas'):
             self.canvas._update_size()
             self.canvas.update()
-
-    def on_open_clicked(self):
-        """Switch to a different graph in the DB."""
-        graphs = list_graphs_in_db(self._db)
-        if not graphs:
-            QMessageBox.information(self, "提示", "数据库中没有运行图。可使用 文件→导入 JSON 导入。")
-            return
-        names = [g[0] for g in graphs]
-        if len(names) == 1:
-            QMessageBox.information(self, "提示", f"数据库中只有一份运行图：{names[0]}")
-            return
-        name, ok = QInputDialog.getItem(self, "打开运行图", "选择运行图:", names, 0, False)
-        if ok and name and name != self._current_graph_name:
-            self._load_from_db(name)
-            self.refresh_train_path_table()
-            self.update_graph_param_fields()
-            self.path_selected_label.setText("")
-            self.rail_track_table.setRowCount(0)
-            self.canvas.update()
-
-    def on_save_clicked(self):
-        save_train_graph_to_db(self.train_graph, self._db)
-        self._current_graph_name = self.train_graph.name
-
-    def on_save_as_clicked(self):
-        """Save current graph under a new name in the DB."""
-        name, ok = QInputDialog.getText(
-            self, "另存为", "新运行图名称:",
-            text=self.train_graph.name + " (副本)")
-        if ok and name:
-            old_name = self.train_graph.name
-            self.train_graph.name = name
-            try:
-                save_train_graph_to_db(self.train_graph, self._db)
-                self._current_graph_name = name
-                self.update_graph_param_fields()
-            except Exception:
-                self.train_graph.name = old_name
-                raise
 
     def on_import_json_clicked(self):
         """Import a JSON file into the DB (graph + optional routes)."""
