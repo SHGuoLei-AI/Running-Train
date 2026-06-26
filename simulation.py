@@ -47,8 +47,6 @@ class TrackInfo:
     length_km: int
     angle_rad: float
     path_code: str = ""
-    up_direction: str = "N"
-    down_direction: str = "S"
     is_down: int = 1  # track 头→尾 方向是否为下行（1=下行，0=上行）
 
 
@@ -102,8 +100,6 @@ class SegmentIndex:
                     length_km=track.length,
                     angle_rad=math.radians(track.actual_angle),
                     path_code=str(path_code),
-                    up_direction=getattr(track, 'up_direction', 'N') or 'N',
-                    down_direction=getattr(track, 'down_direction', 'S') or 'S',
                     is_down=getattr(track, 'is_down', 1) if getattr(track, 'is_down', None) is not None else 1,
                 )
                 # 双向索引（同一 TrackInfo 对象，通过 head/tail 判断方向）
@@ -202,8 +198,6 @@ class RouteTrackIndex:
                     length_km=track.length,
                     angle_rad=math.radians(track.actual_angle),
                     path_code=str(pid),
-                    up_direction=getattr(track, 'up_direction', 'N') or 'N',
-                    down_direction=getattr(track, 'down_direction', 'S') or 'S',
                     is_down=getattr(track, 'is_down', 1) if getattr(track, 'is_down', None) is not None else 1,
                 )
                 track_infos.append(info)
@@ -311,6 +305,22 @@ DIRECTION_LABELS = ['N', 'E', 'S', 'W']
 def _perpendicular_offset(angle_rad: float, sign: int) -> tuple[float, float]:
     """垂直轨道方向的偏移量（sign=+1=屏幕上方/上行方向）"""
     return -sign * TRACK_OFFSET * -math.sin(angle_rad), -sign * TRACK_OFFSET * math.cos(angle_rad)
+
+
+def _label_direction(angle_rad: float, p_sign: int) -> str:
+    """根据轨道角度和偏移符号自动计算车次号方向（N/E/S/W）。
+
+    轨道角度≈0°且下行在上→下行N上行S；
+    轨道角度≈180°且下行在下→下行S上行N；
+    轨道角度≈90°→下行E上行W；
+    轨道角度≈270°→下行W上行E。
+    """
+    dx = p_sign * TRACK_OFFSET * math.sin(angle_rad)
+    dy = -p_sign * TRACK_OFFSET * math.cos(angle_rad)
+    if abs(dx) >= abs(dy):
+        return 'E' if dx > 0 else 'W'
+    else:
+        return 'N' if dy < 0 else 'S'
 
 
 
@@ -512,7 +522,7 @@ class TrainPositioner:
             train_is_down = _train_is_down_on_track(last_track, is_forward)
             p_sign = _perpendicular_sign(train_is_down)
             dx, dy = _perpendicular_offset(last_track.angle_rad, p_sign)
-            direction = last_track.down_direction if train_is_down else last_track.up_direction
+            direction = _label_direction(last_track.angle_rad, p_sign)
             return TrainPosition(x=x + dx, y=y + dy, label=label, color=color,
                                  direction=direction)
 
@@ -532,7 +542,7 @@ class TrainPositioner:
         train_is_down = _train_is_down_on_track(first_track, is_forward)
         p_sign = _perpendicular_sign(train_is_down)
         dx, dy = _perpendicular_offset(first_track.angle_rad, p_sign)
-        direction = first_track.down_direction if train_is_down else first_track.up_direction
+        direction = _label_direction(first_track.angle_rad, p_sign)
 
         return TrainPosition(x=x + dx, y=y + dy, label=label, color=color,
                              direction=direction)
@@ -589,7 +599,7 @@ class TrainPositioner:
                 x = track.x1 + ratio * (track.x2 - track.x1)
                 y = track.y1 + ratio * (track.y2 - track.y1)
                 dx, dy = _perpendicular_offset(track.angle_rad, p_sign)
-                direction = track.down_direction if train_is_down else track.up_direction
+                direction = _label_direction(track.angle_rad, p_sign)
 
                 return TrainPosition(x=x + dx, y=y + dy, label=label,
                                      color=train_color(train_name),
@@ -604,7 +614,7 @@ class TrainPositioner:
         train_is_down = _train_is_down_on_track(last_track, is_forward)
         p_sign = _perpendicular_sign(train_is_down)
         dx, dy = _perpendicular_offset(last_track.angle_rad, p_sign)
-        direction = last_track.down_direction if train_is_down else last_track.up_direction
+        direction = _label_direction(last_track.angle_rad, p_sign)
         return TrainPosition(x=last_track.x2 + dx, y=last_track.y2 + dy,
                              label=label, color=train_color(train_name),
                              direction=direction)

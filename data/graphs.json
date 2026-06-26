@@ -11,9 +11,9 @@
             "rt_db": "data/rt-shanghai.db"
         }
     ],
-    "active": "xinjiang",
+    "active": "shanghai",
     "recent": [
-        "xinjiang",
-        "shanghai"
+        "shanghai",
+        "xinjiang"
     ]
 }

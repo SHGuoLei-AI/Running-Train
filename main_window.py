@@ -131,10 +131,10 @@ class MainWindow(QMainWindow):
         self.path_btn_layout.addWidget(self.delete_path_button)
 
         self.rail_track_table = QTableWidget()
-        self.rail_track_table.setColumnCount(9)
+        self.rail_track_table.setColumnCount(7)
         self.rail_track_table.setHorizontalHeaderLabels(
-            ["画", "头站", "画", "尾站", "长度", "偏转", "上行方向", "下行方向", "头→尾"])
-        widths = [20, 80, 20, 80, 40, 30, 56, 56, 48]
+            ["画", "头站", "画", "尾站", "长度", "偏转", "头→尾"])
+        widths = [20, 80, 20, 80, 40, 30, 48]
         for i, w in enumerate(widths):
             self.rail_track_table.setColumnWidth(i, w)
         self.rail_track_table.verticalHeader().setFixedWidth(24)
@@ -457,8 +457,7 @@ class MainWindow(QMainWindow):
                 path_id INTEGER REFERENCES railway_path(id), seq INTEGER NOT NULL,
                 head_station TEXT, tail_station TEXT, length INTEGER, deflection INTEGER DEFAULT 0,
                 draw_head INTEGER DEFAULT 1, draw_tail INTEGER DEFAULT 0,
-                label_flip INTEGER DEFAULT 0, up_direction TEXT DEFAULT 'N',
-                down_direction TEXT DEFAULT 'S', is_down INTEGER DEFAULT 1);
+                label_flip INTEGER DEFAULT 0, is_down INTEGER DEFAULT 1);
             CREATE TABLE routes (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
                 start_station TEXT NOT NULL, end_station TEXT NOT NULL, total_distance INTEGER,
                 junction_count INTEGER DEFAULT 0, prohibit_high_speed INTEGER DEFAULT 0,
@@ -1254,21 +1253,13 @@ class MainWindow(QMainWindow):
         self.rail_track_table.setItem(row, 3, QTableWidgetItem(track.tail_station))
         self.rail_track_table.setItem(row, 4, QTableWidgetItem(str(int(track.length))))
         self.rail_track_table.setItem(row, 5, QTableWidgetItem(str(int(track.deflection))))
-        # 上行方向（点击循环切换）
-        up_item = QTableWidgetItem(getattr(track, 'up_direction', 'N') or 'N')
-        up_item.setFlags(up_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        self.rail_track_table.setItem(row, 6, up_item)
-        # 下行方向（点击循环切换）
-        down_item = QTableWidgetItem(getattr(track, 'down_direction', 'S') or 'S')
-        down_item.setFlags(down_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        self.rail_track_table.setItem(row, 7, down_item)
         # 头→尾 方向（点击切换 下行/上行）
         is_down_val = getattr(track, 'is_down', 1)
         if is_down_val is None:
             is_down_val = 1
         is_down_item = QTableWidgetItem('下行' if is_down_val else '上行')
         is_down_item.setFlags(is_down_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        self.rail_track_table.setItem(row, 8, is_down_item)
+        self.rail_track_table.setItem(row, 6, is_down_item)
 
     def on_track_item_changed(self, item):
         if self._refreshing:
@@ -1314,8 +1305,6 @@ class MainWindow(QMainWindow):
         if needs_sim_refresh:
             self._refresh_simulation()
 
-    DIRECTION_CYCLE = ['N', 'E', 'S', 'W']
-
     def on_track_table_cell_clicked(self, row, col):
         if col in (0, 2):
             # 画头站/画尾站 checkbox
@@ -1325,33 +1314,7 @@ class MainWindow(QMainWindow):
             current = item.data(Qt.ItemDataRole.CheckStateRole)
             new_state = Qt.CheckState.Unchecked if current == Qt.CheckState.Checked else Qt.CheckState.Checked
             item.setData(Qt.ItemDataRole.CheckStateRole, new_state)
-        elif col in (6, 7):
-            # 上行/下行方向：点击循环切换
-            item = self.rail_track_table.item(row, col)
-            if not item:
-                return
-            current = item.text()
-            try:
-                idx = self.DIRECTION_CYCLE.index(current)
-            except ValueError:
-                idx = 0
-            new_dir = self.DIRECTION_CYCLE[(idx + 1) % len(self.DIRECTION_CYCLE)]
-            item.setText(new_dir)
-            # 写入 track 对象
-            sel_row = self.train_path_table.currentRow()
-            if 0 <= sel_row < len(self.train_graph.train_paths):
-                path = self.train_graph.train_paths[sel_row]
-                if row < len(path.tracks):
-                    track = path.tracks[row]
-                    if col == 6:
-                        track.up_direction = new_dir
-                    else:
-                        track.down_direction = new_dir
-                    from models import save_train_graph_to_db
-                    save_train_graph_to_db(self.train_graph, self._db)
-                    self.canvas.update()
-                    self._refresh_simulation()
-        elif col == 8:
+        elif col == 6:
             # 头→尾 方向：点击切换 下行/上行
             item = self.rail_track_table.item(row, col)
             if not item:
