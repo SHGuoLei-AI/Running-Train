@@ -1476,10 +1476,12 @@ class MainWindow(QMainWindow):
         # 缓存车次→起讫站映射（用于状态栏悬停提示）
         self._train_info: dict[str, tuple[str, str]] = {}
         try:
-            rows = self._db.execute(
+            rt_conn = sqlite3.connect(rt_path)
+            rows = rt_conn.execute(
                 'SELECT train_name, from_station, to_station FROM region_trains'
             ).fetchall()
             self._train_info = {r[0]: (r[1], r[2]) for r in rows}
+            rt_conn.close()
         except Exception:
             pass
 
