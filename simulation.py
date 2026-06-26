@@ -337,8 +337,10 @@ def _train_is_down_on_track(track: TrackInfo, is_forward: bool) -> bool:
 
 
 def _perpendicular_sign(train_is_down: bool) -> int:
-    """上下行 → 垂直偏移符号（+1=上行侧，-1=下行侧）。"""
-    return -1 if train_is_down else 1
+    """上下行 → 垂直偏移符号。
+    上行 → -1（靠左/轨道上方），下行 → +1（靠右/轨道下方）。
+    """
+    return 1 if train_is_down else -1
 
 
 
