@@ -60,7 +60,7 @@ class RailwayTrack:
     """铁路区间类"""
     def __init__(self, length, deflection, head_station="", tail_station="",
                  draw_head=True, draw_tail=False, start_point=(0, 0), label_flip=0,
-                 up_direction="N", down_direction="S", **kwargs):
+                 up_direction="N", down_direction="S", is_down=1, **kwargs):
         self.length = length
         self.deflection = deflection
         self.head_station = head_station
@@ -72,6 +72,7 @@ class RailwayTrack:
         self.label_flip = label_flip
         self.up_direction = up_direction
         self.down_direction = down_direction
+        self.is_down = is_down
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -105,7 +106,8 @@ def load_train_graph_from_json(json_file_path):
                 draw_head=t_data.get('draw_start', True),
                 draw_tail=t_data.get('draw_end', False),
                 up_direction=t_data.get('up_direction', 'N'),
-                down_direction=t_data.get('down_direction', 'S')))
+                down_direction=t_data.get('down_direction', 'S'),
+                is_down=t_data.get('is_down', 1)))
         train_graph.add_train_path(path)
     return train_graph
 
@@ -139,6 +141,7 @@ def save_train_graph_to_json(train_graph, file_path, routes=None, route_stations
                             "label_flip": getattr(t, 'label_flip', 0),
                             "up_direction": getattr(t, 'up_direction', 'N') or 'N',
                             "down_direction": getattr(t, 'down_direction', 'S') or 'S',
+                            "is_down": getattr(t, 'is_down', 1) if getattr(t, 'is_down', None) is not None else 1,
                         }
                         for t in p.tracks
                     ]
@@ -201,18 +204,20 @@ def load_train_graph_from_db(db, graph_name=None):
 
             tracks = conn.execute(
                 'SELECT head_station, tail_station, length, deflection, '
-                'draw_head, draw_tail, label_flip, up_direction, down_direction '
+                'draw_head, draw_tail, label_flip, up_direction, down_direction, '
+                'is_down '
                 'FROM railway_track WHERE path_id=? ORDER BY seq',
                 (pid,)).fetchall()
 
-            for hs, ts, length, deflection, dh, dt, lf, ud, dd in tracks:
+            for hs, ts, length, deflection, dh, dt, lf, ud, dd, idn in tracks:
                 path.add_track(RailwayTrack(
                     length=length, deflection=deflection or 0,
                     head_station=hs or '', tail_station=ts or '',
                     draw_head=bool(dh), draw_tail=bool(dt),
                     label_flip=int(lf or 0),
                     up_direction=ud or 'N',
-                    down_direction=dd or 'S'))
+                    down_direction=dd or 'S',
+                    is_down=int(idn) if idn is not None else 1))
 
             train_graph.add_train_path(path)
 
@@ -263,8 +268,8 @@ def save_train_graph_to_db(train_graph, db):
                 conn.execute(
                     'INSERT INTO railway_track '
                     '(path_id, seq, head_station, tail_station, length, deflection, '
-                    'draw_head, draw_tail, label_flip, up_direction, down_direction) '
-                    'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                    'draw_head, draw_tail, label_flip, up_direction, down_direction, is_down) '
+                    'VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
                     (path_db_id, seq,
                      track.head_station, track.tail_station,
                      track.length, track.deflection,
@@ -272,7 +277,8 @@ def save_train_graph_to_db(train_graph, db):
                      1 if track.draw_tail else 0,
                      getattr(track, 'label_flip', 0),
                      getattr(track, 'up_direction', 'N') or 'N',
-                     getattr(track, 'down_direction', 'S') or 'S'))
+                     getattr(track, 'down_direction', 'S') or 'S',
+                     getattr(track, 'is_down', 1) if getattr(track, 'is_down', None) is not None else 1))
 
         conn.commit()
     except Exception:

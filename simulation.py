@@ -6,7 +6,6 @@ SimulationClock: 模拟时钟 0-1439 分钟循环
 TrainRenderer: 列车绘制（圆点 + 方向标签）
 """
 import math
-import re
 import time
 import sqlite3
 from collections import deque
@@ -50,6 +49,7 @@ class TrackInfo:
     path_code: str = ""
     up_direction: str = "N"
     down_direction: str = "S"
+    is_down: int = 1  # track 头→尾 方向是否为下行（1=下行，0=上行）
 
 
 @dataclass
@@ -104,6 +104,7 @@ class SegmentIndex:
                     path_code=str(path_code),
                     up_direction=getattr(track, 'up_direction', 'N') or 'N',
                     down_direction=getattr(track, 'down_direction', 'S') or 'S',
+                    is_down=getattr(track, 'is_down', 1) if getattr(track, 'is_down', None) is not None else 1,
                 )
                 # 双向索引（同一 TrackInfo 对象，通过 head/tail 判断方向）
                 idx.segment_map[(track.head_station, track.tail_station)] = info
@@ -203,6 +204,7 @@ class RouteTrackIndex:
                     path_code=str(pid),
                     up_direction=getattr(track, 'up_direction', 'N') or 'N',
                     down_direction=getattr(track, 'down_direction', 'S') or 'S',
+                    is_down=getattr(track, 'is_down', 1) if getattr(track, 'is_down', None) is not None else 1,
                 )
                 track_infos.append(info)
                 stn_map[track.head_station] = ti
@@ -325,12 +327,20 @@ def _parse_minute(t: Optional[str]) -> Optional[int]:
     return None
 
 
-def _get_line_sign(train_label: str) -> int:
-    """根据车次号最末数字段奇偶判断上/下行：奇数=上行(+1)，偶数=下行(-1)"""
-    nums = re.findall(r'\d+', train_label)
-    if nums:
-        return 1 if int(nums[-1]) % 2 == 1 else -1
-    return 1  # 默认上行
+def _train_is_down_on_track(track: TrackInfo, is_forward: bool) -> bool:
+    """判断列车在给定 track 上的运行方向是否为下行。
+
+    track.is_down 表示 track 头→尾 方向是否为下行。
+    is_forward=True 表示列车沿 track 头→尾 方向运行。
+    """
+    return bool(track.is_down) if is_forward else not bool(track.is_down)
+
+
+def _perpendicular_sign(train_is_down: bool) -> int:
+    """上下行 → 垂直偏移符号（+1=上行侧，-1=下行侧）。"""
+    return -1 if train_is_down else 1
+
+
 
 
 
@@ -475,7 +485,6 @@ class TrainPositioner:
         """列车停在 stops[i]，在对应图内 track 的站端坐标。"""
         label = stops[i].segment_train_no or train_name
         color = train_color(train_name)
-        sign = _get_line_sign(label)
 
         # 找到包含此站的匹配段（端站允许命中）
         seg = self._find_containing_segment(train_name, i, inclusive_end=True)
@@ -493,10 +502,15 @@ class TrainPositioner:
             last_track = tracks[-1]
             if stops[i].station_name == last_track.tail_station:
                 x, y = last_track.x2, last_track.y2
+                is_forward = True
             else:
                 x, y = last_track.x1, last_track.y1
-            dx, dy = _perpendicular_offset(last_track.angle_rad, sign)
-            direction = last_track.up_direction if sign == 1 else last_track.down_direction
+                is_forward = False
+
+            train_is_down = _train_is_down_on_track(last_track, is_forward)
+            p_sign = _perpendicular_sign(train_is_down)
+            dx, dy = _perpendicular_offset(last_track.angle_rad, p_sign)
+            direction = last_track.down_direction if train_is_down else last_track.up_direction
             return TrainPosition(x=x + dx, y=y + dy, label=label, color=color,
                                  direction=direction)
 
@@ -508,10 +522,15 @@ class TrainPositioner:
         first_track = tracks[0]
         if stops[i].station_name == first_track.head_station:
             x, y = first_track.x1, first_track.y1
+            is_forward = True
         else:
             x, y = first_track.x2, first_track.y2
-        dx, dy = _perpendicular_offset(first_track.angle_rad, sign)
-        direction = first_track.up_direction if sign == 1 else first_track.down_direction
+            is_forward = False
+
+        train_is_down = _train_is_down_on_track(first_track, is_forward)
+        p_sign = _perpendicular_sign(train_is_down)
+        dx, dy = _perpendicular_offset(first_track.angle_rad, p_sign)
+        direction = first_track.down_direction if train_is_down else first_track.up_direction
 
         return TrainPosition(x=x + dx, y=y + dy, label=label, color=color,
                              direction=direction)
@@ -535,7 +554,7 @@ class TrainPositioner:
             return None
 
         label = stops[i].segment_train_no or train_name
-        sign = _get_line_sign(label)
+        nxt_seg_no = stops[i + 1].segment_train_no if i + 1 < len(stops) else None
 
         time_ratio = (T - dep) / (arr - dep)
         traveled = time_ratio * seg_dist
@@ -544,10 +563,19 @@ class TrainPositioner:
         entry_stn = stops[i].station_name
         acc = 0.0
         for ti, track in enumerate(tracks):
+            # 复车次换号检测：跨 path 且下一站车次号不同时切换
+            if ti > 0 and track.path_code != tracks[ti - 1].path_code:
+                if nxt_seg_no and nxt_seg_no != stops[i].segment_train_no:
+                    label = nxt_seg_no
+
             tk_len = track.length_km
             is_last = (ti == len(tracks) - 1)
             is_forward = (entry_stn == track.head_station)
             exit_stn = track.tail_station if is_forward else track.head_station
+
+            # 基于 track 方向判定上下行
+            train_is_down = _train_is_down_on_track(track, is_forward)
+            p_sign = _perpendicular_sign(train_is_down)
 
             if traveled <= acc + tk_len or is_last:
                 local = traveled - acc
@@ -558,8 +586,8 @@ class TrainPositioner:
 
                 x = track.x1 + ratio * (track.x2 - track.x1)
                 y = track.y1 + ratio * (track.y2 - track.y1)
-                dx, dy = _perpendicular_offset(track.angle_rad, sign)
-                direction = track.up_direction if sign == 1 else track.down_direction
+                dx, dy = _perpendicular_offset(track.angle_rad, p_sign)
+                direction = track.down_direction if train_is_down else track.up_direction
 
                 return TrainPosition(x=x + dx, y=y + dy, label=label,
                                      color=train_color(train_name),
@@ -570,8 +598,11 @@ class TrainPositioner:
 
         # fallback
         last_track = tracks[-1]
-        dx, dy = _perpendicular_offset(last_track.angle_rad, sign)
-        direction = last_track.up_direction if sign == 1 else last_track.down_direction
+        is_forward = (entry_stn == last_track.tail_station)
+        train_is_down = _train_is_down_on_track(last_track, is_forward)
+        p_sign = _perpendicular_sign(train_is_down)
+        dx, dy = _perpendicular_offset(last_track.angle_rad, p_sign)
+        direction = last_track.down_direction if train_is_down else last_track.up_direction
         return TrainPosition(x=last_track.x2 + dx, y=last_track.y2 + dy,
                              label=label, color=train_color(train_name),
                              direction=direction)

@@ -131,10 +131,10 @@ class MainWindow(QMainWindow):
         self.path_btn_layout.addWidget(self.delete_path_button)
 
         self.rail_track_table = QTableWidget()
-        self.rail_track_table.setColumnCount(8)
+        self.rail_track_table.setColumnCount(9)
         self.rail_track_table.setHorizontalHeaderLabels(
-            ["画", "头站", "画", "尾站", "长度", "偏转", "上行方向", "下行方向"])
-        widths = [20, 80, 20, 80, 40, 30, 56, 56]
+            ["画", "头站", "画", "尾站", "长度", "偏转", "上行方向", "下行方向", "头→尾"])
+        widths = [20, 80, 20, 80, 40, 30, 56, 56, 48]
         for i, w in enumerate(widths):
             self.rail_track_table.setColumnWidth(i, w)
         self.rail_track_table.verticalHeader().setFixedWidth(24)
@@ -458,7 +458,7 @@ class MainWindow(QMainWindow):
                 head_station TEXT, tail_station TEXT, length INTEGER, deflection INTEGER DEFAULT 0,
                 draw_head INTEGER DEFAULT 1, draw_tail INTEGER DEFAULT 0,
                 label_flip INTEGER DEFAULT 0, up_direction TEXT DEFAULT 'N',
-                down_direction TEXT DEFAULT 'S');
+                down_direction TEXT DEFAULT 'S', is_down INTEGER DEFAULT 1);
             CREATE TABLE routes (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
                 start_station TEXT NOT NULL, end_station TEXT NOT NULL, total_distance INTEGER,
                 junction_count INTEGER DEFAULT 0, prohibit_high_speed INTEGER DEFAULT 0,
@@ -983,6 +983,15 @@ class MainWindow(QMainWindow):
 
         line_name, first_station, last_station = result
 
+        # 选择方向
+        from PySide6.QtWidgets import QInputDialog
+        direction_choice = QInputDialog.getItem(
+            self, "选择方向", f"请指定 [{line_name}] 从 {first_station} 到 {last_station} 的方向：",
+            ["下行（头→尾）", "上行（头→尾）"], 0, False)
+        if not direction_choice:
+            return
+        is_down = 0 if direction_choice.startswith('上行') else 1
+
         # 查kl获取首末站之间的所有车站（按里程排序）
         kl = sqlite3.connect(KL_PATH)
         try:
@@ -1031,7 +1040,8 @@ class MainWindow(QMainWindow):
             path.add_track(RailwayTrack(
                 length=seg_len, deflection=0,
                 head_station=sn_a, tail_station=sn_b,
-                draw_head=is_first, draw_tail=is_last))
+                draw_head=is_first, draw_tail=is_last,
+                is_down=is_down))
 
         self.train_graph.add_train_path(path)
         new_row = len(self.train_graph.train_paths) - 1
@@ -1252,6 +1262,13 @@ class MainWindow(QMainWindow):
         down_item = QTableWidgetItem(getattr(track, 'down_direction', 'S') or 'S')
         down_item.setFlags(down_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         self.rail_track_table.setItem(row, 7, down_item)
+        # 头→尾 方向（点击切换 下行/上行）
+        is_down_val = getattr(track, 'is_down', 1)
+        if is_down_val is None:
+            is_down_val = 1
+        is_down_item = QTableWidgetItem('下行' if is_down_val else '上行')
+        is_down_item.setFlags(is_down_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.rail_track_table.setItem(row, 8, is_down_item)
 
     def on_track_item_changed(self, item):
         if self._refreshing:
@@ -1334,6 +1351,24 @@ class MainWindow(QMainWindow):
                     save_train_graph_to_db(self.train_graph, self._db)
                     self.canvas.update()
                     self._refresh_simulation()
+        elif col == 8:
+            # 头→尾 方向：点击切换 下行/上行
+            item = self.rail_track_table.item(row, col)
+            if not item:
+                return
+            current = item.text()
+            new_val = '上行' if current == '下行' else '下行'
+            item.setText(new_val)
+            sel_row = self.train_path_table.currentRow()
+            if 0 <= sel_row < len(self.train_graph.train_paths):
+                path = self.train_graph.train_paths[sel_row]
+                if row < len(path.tracks):
+                    track = path.tracks[row]
+                    track.is_down = 1 if new_val == '下行' else 0
+                    from models import save_train_graph_to_db
+                    save_train_graph_to_db(self.train_graph, self._db)
+                    self.canvas.update()
+                    self._refresh_simulation()
 
     def on_extend_head_clicked(self):
         """在第一个区间前插入新区间（头部延伸）。"""
@@ -1346,7 +1381,11 @@ class MainWindow(QMainWindow):
             return
 
         old_head = path.tracks[0].head_station
-        new_track = RailwayTrack(length=10, deflection=0, head_station="新头站", tail_station=old_head)
+        inherit_is_down = getattr(path.tracks[0], 'is_down', 1)
+        if inherit_is_down is None:
+            inherit_is_down = 1
+        new_track = RailwayTrack(length=10, deflection=0, head_station="新头站", tail_station=old_head,
+                                 is_down=inherit_is_down)
         path.tracks.insert(0, new_track)
 
         # 级联更新所有区间起点
@@ -1382,7 +1421,11 @@ class MainWindow(QMainWindow):
         old_head = nxt.head_station
         nxt.head_station = "新站"
 
-        new_track = RailwayTrack(length=10, deflection=0, head_station=old_head, tail_station="新站")
+        inherit_is_down = getattr(path.tracks[track_row], 'is_down', 1)
+        if inherit_is_down is None:
+            inherit_is_down = 1
+        new_track = RailwayTrack(length=10, deflection=0, head_station=old_head, tail_station="新站",
+                                 is_down=inherit_is_down)
         path.tracks.insert(track_row + 1, new_track)
 
         # 级联更新后续区间起点
@@ -1406,7 +1449,11 @@ class MainWindow(QMainWindow):
             return
         path = self.train_graph.train_paths[row]
         head = path.tracks[-1].tail_station if path.tracks else "起点"
-        track = RailwayTrack(length=10, deflection=0, head_station=head, tail_station="新尾站")
+        inherit_is_down = getattr(path.tracks[-1], 'is_down', 1) if path.tracks else 1
+        if inherit_is_down is None:
+            inherit_is_down = 1
+        track = RailwayTrack(length=10, deflection=0, head_station=head, tail_station="新尾站",
+                             is_down=inherit_is_down)
         path.add_track(track)
         new_row = len(path.tracks) - 1
         self.rail_track_table.blockSignals(True)

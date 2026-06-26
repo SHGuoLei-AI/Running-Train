@@ -18,6 +18,31 @@
 2. 客里表（kl）数据不可修改
 3. 经由表数据只能来自客里表，**绝对不允许用时刻表数据修正经由表**，反之亦然
 
+## 二、上下行方向系统
+
+列车上下行由 **track.is_down + 列车在该 track 上的走行方向** 联合判定，**不依赖车次号奇偶**。
+
+### track.is_down
+- `railway_track.is_down` = 1 表示 track 头站→尾站 方向为下行（默认）
+- = 0 表示 track 头站→尾站 方向为上行
+
+### 运行时判定
+```python
+is_forward = (entry_stn == track.head_station)  # 列车是否沿头→尾方向走
+train_is_down = track.is_down if is_forward else (1 - track.is_down)
+# 画布方向：
+direction = track.down_direction if train_is_down else track.up_direction
+```
+
+### 复车次换号
+在 `_running()` 遍历 track 序列时，检测到 path_code 变化且前后停站 segment_train_no 不同 → 自动切换到新号。解决 C801/C804 等在大河沿（非停站）换号的问题。
+
+### 构建 path 时的方向
+- 从 kl 构建：提示用户选择下行/上行 → 批量写入所有 track.is_down
+- 直接新增 path（单 track）：默认 is_down=1（下行）
+- track 头尾延伸/插入：新 track 继承相邻已有 track 的 is_down
+- UI track 表 "头→尾" 列可点击切换
+
 ## 二、经由设计流程
 
 ### 1. 确定起讫站
