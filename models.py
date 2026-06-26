@@ -171,11 +171,12 @@ def load_train_graph_from_db(db, graph_name=None):
     conn, own = _resolve_db(db)
     try:
         g = conn.execute(
-            'SELECT name, length, width, scale, default_scale FROM train_graph LIMIT 1').fetchone()
+            'SELECT name, length, width, scale, default_scale, default_speed FROM train_graph LIMIT 1').fetchone()
         if not g:
             raise ValueError('No train_graph found in database')
         train_graph = TrainGraph(name=g[0], length=g[1], width=g[2], scale=g[3],
-                                 default_scale=g[4] if g[4] is not None else g[3])
+                                 default_scale=g[4] if g[4] is not None else g[3],
+                                 default_speed=g[5] if len(g) > 5 and g[5] is not None else 1.0)
 
         paths = conn.execute(
             'SELECT id, name, kl_line_name, start_x, start_y, angle, hidden '
@@ -228,10 +229,11 @@ def save_train_graph_to_db(train_graph, db):
         conn.execute('DELETE FROM railway_path')
 
         conn.execute(
-            'INSERT OR REPLACE INTO train_graph (name, length, width, scale, default_scale) '
-            'VALUES (?,?,?,?,?)',
-            (graph_name, train_graph.length, train_graph.width, train_graph.scale,
-             getattr(train_graph, 'default_scale', train_graph.scale) or train_graph.scale))
+            'INSERT OR REPLACE INTO train_graph (name, length, width, scale, default_scale, default_speed) '
+            'VALUES (?,?,?,?,?,?)',
+            (train_graph.name, train_graph.length, train_graph.width, train_graph.scale,
+             getattr(train_graph, 'default_scale', train_graph.scale) or train_graph.scale,
+             getattr(train_graph, 'default_speed', 1.0) or 1.0))
 
         for sort_order, path in enumerate(train_graph.train_paths):
             kl = getattr(path, 'kl_line_name', '') or ''

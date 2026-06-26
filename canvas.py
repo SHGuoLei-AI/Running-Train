@@ -1,6 +1,6 @@
 import math
 from PySide6.QtWidgets import QWidget
-from PySide6.QtCore import Qt, QRect
+from PySide6.QtCore import Qt, QRect, Signal
 from PySide6.QtGui import QPainter, QPen, QColor
 
 from simulation import TrainRenderer
@@ -12,16 +12,69 @@ DOWN_LINE_COLOR = QColor(200, 255, 200)
 
 class DrawingCanvas(QWidget):
     """自定义绘制画布"""
+
+    NEARBY_THRESHOLD = 15  # 像素，判定"靠近"端点的距离
+
+    mouse_status = Signal(str)  # 格式化状态文本
+
     def __init__(self, train_graph, parent=None):
         super().__init__(parent)
         self.train_graph = train_graph
         self._train_positions: list = []  # list of TrainPosition
+        self.setMouseTracking(True)
         self._update_size()
 
     def set_train_positions(self, positions: list):
         """设置要绘制的列车位置列表，触发重绘"""
         self._train_positions = positions
         self.update()
+
+    def mouseMoveEvent(self, event):
+        """跟踪鼠标位置，查找附近端点，发射状态文本"""
+        scale = self.train_graph.scale
+        px = event.position().x()
+        py = event.position().y()
+        km_x = px / scale if scale else 0
+        km_y = py / scale if scale else 0
+
+        nearby = self._find_nearby_station(px, py)
+        if nearby:
+            stn_name, stn_km_x, stn_km_y = nearby
+            status = f" X：{km_x:.0f} km，Y：{km_y:.0f} km （{stn_name}站， X：{stn_km_x:.0f} Y：{stn_km_y:.0f}）"
+        else:
+            status = f" X：{km_x:.0f} km，Y：{km_y:.0f} km"
+
+        self.mouse_status.emit(status)
+        super().mouseMoveEvent(event)
+
+    def _find_nearby_station(self, px: float, py: float) -> tuple | None:
+        """查找鼠标像素坐标附近最近的 track 端点。
+        返回 (站名, 站km_x, 站km_y) 或 None。"""
+        scale = self.train_graph.scale
+        best_dist = self.NEARBY_THRESHOLD
+        best: tuple | None = None
+
+        for track in self.train_graph.get_all_tracks():
+            sx, sy = track.start_point
+            hx = sx * scale
+            hy = sy * scale
+            ex, ey = track.end_point()
+            tx = ex * scale
+            ty = ey * scale
+
+            # 检查 head 端点
+            dh = math.hypot(px - hx, py - hy)
+            if dh < best_dist:
+                best_dist = dh
+                best = (track.head_station, sx, sy)
+
+            # 检查 tail 端点
+            dt = math.hypot(px - tx, py - ty)
+            if dt < best_dist:
+                best_dist = dt
+                best = (track.tail_station, ex, ey)
+
+        return best
 
     def _update_size(self):
         scale = self.train_graph.scale

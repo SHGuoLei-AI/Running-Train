@@ -2,18 +2,14 @@
     "graphs": [
         {
             "id": "xinjiang",
-            "name": "新疆区域",
-            "rg_db": "data/rg.db",
-            "rt_db": "data/rt.db",
-            "default_speed": 8.0
+            "rg_db": "data/rg-xinjiang.db",
+            "rt_db": "data/rt-xinjiang.db"
         },
         {
             "id": "shanghai",
-            "name": "上海区域",
             "rg_db": "data/rg-shanghai.db",
-            "rt_db": "data/rt-shanghai.db",
-            "default_speed": 1.0
+            "rt_db": "data/rt-shanghai.db"
         }
     ],
-    "active": "xinjiang"
+    "active": "shanghai"
 }

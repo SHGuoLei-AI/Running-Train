@@ -33,15 +33,17 @@
 data/
 ├── kl.db             # 客里表 (536 KB) — 756 线, 6654 站（共用）
 ├── cc.db             # 时刻表 (12 MB) — 3298 站, 17168 车次（共用）
-├── rg.db             # 几何结构 — 新疆区域（当前激活图）
-├── rt.db             # 图上车次 — 新疆区域（当前激活图）
-├── rg-shanghai.db    # 几何结构 — 上海区域（归档）
-├── rt-shanghai.db    # 图上车次 — 上海区域（归档）
-├── graphs.json       # 图配置文件
+├── rg-xinjiang.db    # 几何结构 — 新疆区域
+├── rt-xinjiang.db    # 图上车次 — 新疆区域
+├── rg-shanghai.db    # 几何结构 — 上海区域
+├── rt-shanghai.db    # 图上车次 — 上海区域
+├── graphs.json       # 图配置文件（仅 id + 路径）
 ├── backup/           # 自动备份 (不入 git)
 ├── old/              # 旧文件归档 (不入 git)
 └── 数据结构.md        # 完整 schema 文档
 ```
+
+> 图名称和默认速度存在各 `rg-{id}.db` 的 `train_graph` 表中。
 
 ### 多图切换
 
@@ -51,10 +53,11 @@ data/
 graphs.json:
 {
     "graphs": [
-        {"id": "xinjiang", "name": "新疆区域", "rg_db": "data/rg.db", "rt_db": "data/rt.db"},
-        {"id": "shanghai", "name": "上海区域", "rg_db": "data/rg-shanghai.db", "rt_db": "data/rt-shanghai.db"}
+        {"id": "xinjiang", "rg_db": "data/rg-xinjiang.db", "rt_db": "data/rt-xinjiang.db"},
+        {"id": "shanghai", "rg_db": "data/rg-shanghai.db", "rt_db": "data/rt-shanghai.db"}
     ],
-    "active": "xinjiang"
+    "active": "shanghai",
+    "recent": ["shanghai", "xinjiang"]
 }
 ```
 

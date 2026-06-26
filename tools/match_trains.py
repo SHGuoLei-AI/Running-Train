@@ -123,6 +123,60 @@ def match_trains(llt_db, rt_db, rg_db=None, progress=None):
                             if all(stops[k][1] in rev_dists for k in range(i, j + 1)):
                                 matches.append((i, j, rid, rname, sd, True, si[1], stops[j][1]))
 
+        # — Multi-route matching: for each unmatched segment, try combining two routes —
+        if not all(s[2] == 0 for s in stops):
+            matched_pairs = {(m[0], m[1]) for m in matches}
+            for i in range(len(stops)):
+                for j in range(i + 1, len(stops)):
+                    if (i, j) in matched_pairs:
+                        continue
+                    sd = stops[j][2] - stops[i][2]
+                    if sd <= 0:
+                        continue
+                    si_stn = stops[i][1]
+                    sj_stn = stops[j][1]
+
+                    # Find routes containing start station and end station
+                    routes_start = {}  # rid → cum
+                    routes_end = {}    # rid → cum
+                    for rid, rsts in route_stations.items():
+                        if rid < 0:
+                            continue
+                        for s_name, s_cum in rsts:
+                            if s_name == si_stn:
+                                routes_start[rid] = s_cum
+                            if s_name == sj_stn:
+                                routes_end[rid] = s_cum
+
+                    found = False
+                    for rid_a, cum_a_start in routes_start.items():
+                        if found:
+                            break
+                        for rid_b, cum_b_end in routes_end.items():
+                            if rid_a == rid_b:
+                                continue
+                            sts_a = route_stations[rid_a]
+                            sts_b = route_stations[rid_b]
+                            stn_to_cum_b = {s[0]: s[1] for s in sts_b}
+                            for jn_name, cum_a_jn in sts_a:
+                                if jn_name in stn_to_cum_b:
+                                    cum_b_jn = stn_to_cum_b[jn_name]
+                                    d_a = abs(cum_a_jn - cum_a_start)
+                                    d_b = abs(cum_b_end - cum_b_jn)
+                                    if d_a + d_b == sd:
+                                        r_a_names = {s[0] for s in sts_a}
+                                        r_b_names = {s[0] for s in sts_b}
+                                        if all(stops[k][1] in r_a_names or stops[k][1] in r_b_names
+                                               for k in range(i, j + 1)):
+                                            rname = f'R{rid_a}+R{rid_b}'
+                                            matches.append((i, j, 0, rname, sd, False, si_stn, sj_stn))
+                                            found = True
+                                            break
+                                if found:
+                                    break
+                        if found:
+                            break
+
         # Fallback for 0km trains: match by station name sequence only
         if not matches and all(s[2] == 0 for s in stops):
             train_names = [s[1] for s in stops]
@@ -172,9 +226,15 @@ def match_trains(llt_db, rt_db, rg_db=None, progress=None):
                     db_records.append((name, cur, m[0],
                         stops[cur][1], stops[m[0]][1], d, None, None, 0, 'unmatched', 0))
                 rev = '↩' if m[5] else ''
-                segments.append(f'[{m[6]}-{m[7]} {m[4]:.0f}km R{m[2]}{rev}]')
-                db_records.append((name, m[0], m[1],
-                    m[6], m[7], m[4], m[2], f'R{m[2]} {route_map[m[2]]}', m[5], 'matched', 1))
+                if m[2] == 0:
+                    # Multi-route match
+                    segments.append(f'[{m[6]}-{m[7]} {m[4]:.0f}km {m[3]}]')
+                    db_records.append((name, m[0], m[1],
+                        m[6], m[7], m[4], None, m[3], m[5], 'matched', 1))
+                else:
+                    segments.append(f'[{m[6]}-{m[7]} {m[4]:.0f}km R{m[2]}{rev}]')
+                    db_records.append((name, m[0], m[1],
+                        m[6], m[7], m[4], m[2], f'R{m[2]} {route_map[m[2]]}', m[5], 'matched', 1))
                 cur = m[1]
         if cur < len(stops) - 1:
             d = stops[-1][2] - stops[cur][2]

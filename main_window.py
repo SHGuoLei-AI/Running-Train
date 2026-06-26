@@ -40,7 +40,7 @@ class MainWindow(QMainWindow):
         # DB connection (persistent, shared across app lifetime)
         db_path = config.get_rg_path()
         self._db = sqlite3.connect(db_path)
-        self.setWindowTitle(f"Running Train — {config.get_active_graph().get('name', '')}")
+        self.setWindowTitle(f"Running Train — {config.get_graph_name()}")
 
         # 手动创建主窗口部件
         central = QWidget()
@@ -57,17 +57,15 @@ class MainWindow(QMainWindow):
         self._status_bar.addWidget(self._status_label)
 
         # 菜单栏
-        self.menu_file = self.menuBar().addMenu("文件(&F)")
         self.menu_graph = self.menuBar().addMenu("图(&G)")
         self.menu_routes = self.menuBar().addMenu("经由(&R)")
         self.menu_tools = self.menuBar().addMenu("工具(&T)")
         self.menu_settings = self.menuBar().addMenu("设置(&S)")
         self.menu_help = self.menuBar().addMenu("帮助(&H)")
 
-        # 图菜单：切换激活图
-        self._graph_actions = {}
+        # 图菜单
         self._build_graph_menu()
-        self.action_exit = self.menu_file.addAction("退出")
+
         self.action_route_editor = self.menu_routes.addAction("经由维护...")
         self.menu_routes.addSeparator()
         self.action_route_match = self.menu_routes.addAction("车次匹配...")
@@ -83,23 +81,6 @@ class MainWindow(QMainWindow):
         self.action_delete_backups = self.menu_settings.addAction("删除备份文件...")
         self.action_about = self.menu_help.addAction("关于")
 
-        # 文件菜单：打开、保存、另存为、导入/导出 JSON
-        self.action_open = self.menu_file.addAction("打开(&O)...")
-        self.action_open.triggered.connect(self.on_open_clicked)
-        self.action_save = self.menu_file.addAction("保存(&S)")
-        self.action_save.triggered.connect(self.on_save_clicked)
-        self.action_save_as = self.menu_file.addAction("另存为(&A)...")
-        self.action_save_as.triggered.connect(self.on_save_as_clicked)
-        self.menu_file.addSeparator()
-        self.action_import_json = self.menu_file.addAction("导入 JSON...")
-        self.action_import_json.triggered.connect(self.on_import_json_clicked)
-        self.action_export_json = self.menu_file.addAction("导出 JSON...")
-        self.action_export_json.triggered.connect(self.on_export_json_clicked)
-        self.menu_file.insertSeparator(self.action_exit)
-
-        # 图切换信号连接
-        self.action_exit.triggered.connect(self.close)
-
         # 默认从 DB 加载
         self._load_from_db()
 
@@ -107,34 +88,13 @@ class MainWindow(QMainWindow):
         if self._get_auto_backup():
             self._do_backup()
 
-        self.graph_name_field = QLineEdit(self.train_graph.name)
-        self.graph_name_field.setStyleSheet("font-size: 12px; font-weight: bold; border: 1px solid #ccc;")
-        self.graph_name_field.editingFinished.connect(self.on_graph_params_changed)
-        self.graph_length_field = QLineEdit(str(self.train_graph.length))
-        self.graph_length_field.setFixedWidth(40)
-        self.graph_length_field.editingFinished.connect(self.on_graph_params_changed)
-        self.graph_width_field = QLineEdit(str(self.train_graph.width))
-        self.graph_width_field.setFixedWidth(40)
-        self.graph_width_field.editingFinished.connect(self.on_graph_params_changed)
-        self.graph_scale_field = QLineEdit(str(self.train_graph.scale))
-        self.graph_scale_field.setFixedWidth(30)
-        self.graph_scale_field.editingFinished.connect(self.on_graph_params_changed)
+        self.graph_name_label = QLabel(self.train_graph.name)
+        self.graph_name_label.setStyleSheet("font-size: 12px; font-weight: bold; border: none;")
 
         self.graph_param_layout = QHBoxLayout()
         self.graph_param_layout.setContentsMargins(0, 0, 0, 0)
-        self.graph_param_layout.setSpacing(2)
-        name_label = QLabel("名称:"); name_label.setStyleSheet("border: none;")
-        len_label = QLabel("长:"); len_label.setStyleSheet("border: none;")
-        wid_label = QLabel("宽:"); wid_label.setStyleSheet("border: none;")
-        scl_label = QLabel("比例尺:"); scl_label.setStyleSheet("border: none;")
-        self.graph_param_layout.addWidget(name_label)
-        self.graph_param_layout.addWidget(self.graph_name_field, stretch=1)
-        self.graph_param_layout.addWidget(len_label)
-        self.graph_param_layout.addWidget(self.graph_length_field)
-        self.graph_param_layout.addWidget(wid_label)
-        self.graph_param_layout.addWidget(self.graph_width_field)
-        self.graph_param_layout.addWidget(scl_label)
-        self.graph_param_layout.addWidget(self.graph_scale_field)
+        self.graph_param_layout.setSpacing(4)
+        self.graph_param_layout.addWidget(self.graph_name_label, stretch=1)
 
         self.train_path_table = QTableWidget()
         self.train_path_table.setColumnCount(9)
@@ -281,11 +241,12 @@ class MainWindow(QMainWindow):
 
         # 启动模拟（以系统当前时间）
         self._init_simulation()
+        # 记录当前图为最近使用
+        config.record_recent_graph(config.load_graphs().get('active', ''))
 
     # ── 菜单 & 信号 ──────────────────────────────────────
 
     def connect_signals(self):
-        self.action_exit.triggered.connect(self.close)
         self.action_about.triggered.connect(self.on_about_clicked)
         self.action_route_editor.triggered.connect(self.on_route_editor_clicked)
         self.action_route_match.triggered.connect(self.on_route_match_clicked)
@@ -383,20 +344,52 @@ class MainWindow(QMainWindow):
     # ── 图切换 ──────────────────────────────────────────
 
     def _build_graph_menu(self):
-        """构建图切换菜单（radio-action 样式 + 导入车次）。"""
+        """构建图菜单。"""
         self.menu_graph.clear()
-        self._graph_actions.clear()
         graphs = config.load_graphs().get('graphs', [])
         active_id = config.load_graphs().get('active', '')
-        for g in graphs:
-            action = self.menu_graph.addAction(g['name'])
-            action.setCheckable(True)
-            if g['id'] == active_id:
-                action.setChecked(True)
-            action.triggered.connect(lambda checked, gid=g['id']: self._on_switch_graph(gid))
-            self._graph_actions[g['id']] = action
+
+        # — 最近 3 个图 —
+        recent_ids = config.get_recent_graphs(3)
+        id_to_graph = {g['id']: g for g in graphs}
+        shown = set()
+        for rid in recent_ids:
+            g = id_to_graph.get(rid)
+            if g and rid not in shown:
+                gname = config.get_graph_name(rid)
+                action = self.menu_graph.addAction(gname)
+                action.setCheckable(True)
+                if rid == active_id:
+                    action.setChecked(True)
+                action.triggered.connect(lambda checked, gid=rid: self._on_switch_graph(gid))
+                shown.add(rid)
+
+        # — 更多... —
+        other_graphs = [g for g in graphs if g['id'] not in shown]
+        if other_graphs:
+            self.action_more_graphs = self.menu_graph.addAction("更多...")
+            self.action_more_graphs.triggered.connect(self._on_more_graphs)
+
         self.menu_graph.addSeparator()
-        self.action_import_trains = self.menu_graph.addAction("导入车次...")
+
+        # — 新建 —
+        self.action_new_graph = self.menu_graph.addAction("新建")
+        self.action_new_graph.triggered.connect(self._on_new_graph)
+
+        # — 属性 —
+        self.action_graph_props = self.menu_graph.addAction("属性")
+        self.action_graph_props.triggered.connect(self._on_graph_properties)
+
+        # — 导出/导入 JSON —
+        self.action_export_json = self.menu_graph.addAction("导出 JSON...")
+        self.action_export_json.triggered.connect(self.on_export_json_clicked)
+        self.action_import_json = self.menu_graph.addAction("导入 JSON...")
+        self.action_import_json.triggered.connect(self.on_import_json_clicked)
+
+        self.menu_graph.addSeparator()
+
+        # — 导入车次 —
+        self.action_import_trains = self.menu_graph.addAction("导入车次")
         self.action_import_trains.triggered.connect(self._on_import_trains)
 
     def _on_switch_graph(self, graph_id: str):
@@ -404,14 +397,16 @@ class MainWindow(QMainWindow):
         if graph_id == config.load_graphs().get('active', ''):
             return
         config.set_active_graph(graph_id)
+        config.record_recent_graph(graph_id)
         # 关闭旧连接，打开新连接
         if hasattr(self, '_db') and self._db:
             self._db.close()
         db_path = config.get_rg_path()
         self._db = sqlite3.connect(db_path)
-        self.setWindowTitle(f"Running Train — {config.get_active_graph().get('name', '')}")
+        self.setWindowTitle(f"Running Train — {config.get_graph_name()}")
         # 重新加载
         self._load_from_db()
+        self._refresh_graph_ui()
         # 应用默认速度
         default_speed = config.get_default_speed()
         try:
@@ -423,6 +418,161 @@ class MainWindow(QMainWindow):
         # 重建模拟
         self._refresh_simulation()
         self._build_graph_menu()
+
+    def _on_more_graphs(self):
+        """弹出对话框选择其他图。"""
+        graphs = config.load_graphs().get('graphs', [])
+        active_id = config.load_graphs().get('active', '')
+        recent_ids = config.get_recent_graphs(3)
+        # 排除已在菜单中显示的 recent 图
+        other = [g for g in graphs if g['id'] not in recent_ids]
+        if not other:
+            QMessageBox.information(self, "更多图", "没有其他图。")
+            return
+        names = [config.get_graph_name(g['id']) for g in other]
+        name, ok = QInputDialog.getItem(self, "选择图", "图:", names, 0, False)
+        if ok and name:
+            for g in other:
+                if config.get_graph_name(g['id']) == name:
+                    self._on_switch_graph(g['id'])
+                    break
+
+    def _on_new_graph(self):
+        """新建图：输入名称，生成 rg-xxx.db 和 rt-xxx.db。"""
+        name, ok = QInputDialog.getText(self, "新建图", "图名称（英文标识）:", text="xinjiang2")
+        if not ok or not name.strip():
+            return
+        gid = name.strip()
+        rg_name = f'data/rg-{gid}.db'
+        rt_name = f'data/rt-{gid}.db'
+
+        # 检查是否已存在
+        data_dir = os.path.join(os.path.dirname(__file__), 'data')
+        rg_path = os.path.join(data_dir, f'rg-{gid}.db')
+        rt_path = os.path.join(data_dir, f'rt-{gid}.db')
+        if os.path.exists(rg_path) or os.path.exists(rt_path):
+            QMessageBox.warning(self, "新建图", f"图 '{gid}' 的数据库文件已存在。")
+            return
+
+        # 创建 rg.db
+        import sqlite3
+        conn = sqlite3.connect(rg_path)
+        conn.executescript('''
+            CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE train_graph (name TEXT PRIMARY KEY, length INTEGER, width INTEGER,
+                scale INTEGER DEFAULT 1, default_scale INTEGER DEFAULT 1);
+            CREATE TABLE railway_path (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
+                kl_line_name TEXT, start_x INTEGER, start_y INTEGER, angle INTEGER DEFAULT 0,
+                hidden INTEGER DEFAULT 0, sort_order INTEGER DEFAULT 0);
+            CREATE TABLE railway_track (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path_id INTEGER REFERENCES railway_path(id), seq INTEGER NOT NULL,
+                head_station TEXT, tail_station TEXT, length INTEGER, deflection INTEGER DEFAULT 0,
+                draw_head INTEGER DEFAULT 1, draw_tail INTEGER DEFAULT 0,
+                label_flip INTEGER DEFAULT 0, up_direction TEXT DEFAULT 'N',
+                down_direction TEXT DEFAULT 'S');
+            CREATE TABLE routes (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
+                start_station TEXT NOT NULL, end_station TEXT NOT NULL, total_distance INTEGER,
+                junction_count INTEGER DEFAULT 0, prohibit_high_speed INTEGER DEFAULT 0,
+                prohibit_normal_speed INTEGER DEFAULT 0);
+            CREATE TABLE route_stations (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                route_id INTEGER REFERENCES routes(id), seq INTEGER NOT NULL,
+                station_name TEXT NOT NULL, line_name TEXT NOT NULL, cum_distance INTEGER DEFAULT 0,
+                is_junction INTEGER DEFAULT 0);
+            INSERT INTO meta VALUES ('author','');
+            INSERT INTO meta VALUES ('version','1');
+            INSERT INTO meta VALUES ('kl_version','');
+            INSERT INTO meta VALUES ('cc_version','');
+            INSERT INTO meta VALUES ('auto_backup','1');
+            INSERT INTO train_graph VALUES (?, 1000, 600, 1, 1, 1.0);
+        ''', (gid,))
+        conn.commit()
+        conn.close()
+
+        # 创建 rt.db
+        conn2 = sqlite3.connect(rt_path)
+        conn2.executescript('''
+            CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE region_trains (train_name TEXT PRIMARY KEY, from_station TEXT, to_station TEXT);
+            CREATE TABLE train_stops (train_name TEXT NOT NULL, stop_seq INTEGER NOT NULL,
+                station_name TEXT NOT NULL, arrive_time TEXT, depart_time TEXT,
+                distance_km INTEGER DEFAULT 0, segment_train_no TEXT,
+                PRIMARY KEY (train_name, stop_seq));
+            CREATE TABLE train_route_matches (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                train_name TEXT NOT NULL, seg_start_seq INTEGER, seg_end_seq INTEGER,
+                seg_start_station TEXT, seg_end_station TEXT, seg_distance_km INTEGER,
+                route_id INTEGER, route_name TEXT, is_reverse INTEGER DEFAULT 0,
+                match_type TEXT, is_matched INTEGER DEFAULT 1,
+                FOREIGN KEY (train_name) REFERENCES region_trains(train_name));
+            INSERT INTO meta VALUES ('cc_version','');
+            INSERT INTO meta VALUES ('rg_version','1');
+        ''')
+        conn2.commit()
+        conn2.close()
+
+        # 注册到配置
+        config.add_graph(gid, rg_name, rt_name)
+        config.record_recent_graph(gid)
+
+        # 切换到新图
+        self._db.close()
+        self._db = sqlite3.connect(rg_path)
+        self._load_from_db()
+        self._refresh_graph_ui()
+        self._refresh_simulation()
+        self._build_graph_menu()
+
+    def _on_graph_properties(self):
+        """编辑当前图属性。"""
+        from PySide6.QtWidgets import QDialog, QFormLayout
+        dlg = QDialog(self)
+        dlg.setWindowTitle("图属性")
+        layout = QFormLayout(dlg)
+
+        name_edit = QLineEdit(self.train_graph.name)
+        length_edit = QLineEdit(str(int(self.train_graph.length)))
+        width_edit = QLineEdit(str(int(self.train_graph.width)))
+        ds_edit = QLineEdit(str(int(getattr(self.train_graph, 'default_scale', 1) or 1)))
+        speed_edit = QLineEdit(str(config.get_default_speed()))
+
+        layout.addRow("名称:", name_edit)
+        layout.addRow("逻辑长 (km):", length_edit)
+        layout.addRow("逻辑宽 (km):", width_edit)
+        layout.addRow("默认比例尺:", ds_edit)
+        layout.addRow("默认速度:", speed_edit)
+
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        layout.addRow(btns)
+
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        try:
+            self.train_graph.name = name_edit.text().strip()
+            self.train_graph.length = int(float(length_edit.text().strip()))
+            self.train_graph.width = int(float(width_edit.text().strip()))
+            self.train_graph.default_scale = int(float(ds_edit.text().strip()))
+            self._default_scale = self.train_graph.default_scale
+            new_speed = float(speed_edit.text().strip())
+        except ValueError:
+            QMessageBox.warning(self, "图属性", "数值格式错误。")
+            return
+
+        # 保存到 DB（name/default_speed 存在 train_graph 表中）
+        from models import save_train_graph_to_db
+        save_train_graph_to_db(self.train_graph, self._db)
+
+        # 刷新
+        self._refresh_graph_ui()
+        self._build_graph_menu()
+        self.setWindowTitle(f"Running Train — {self.train_graph.name}")
+        self._sim_clock.set_speed(new_speed)
+        try:
+            idx = self._sim_panel.SPEEDS.index(new_speed)
+            self._sim_panel.speed_combo.setCurrentIndex(idx)
+        except ValueError:
+            pass
 
     def _on_import_trains(self):
         """从时刻表（cc.db）导入经过本图车站的所有车次到 rt.db。"""
@@ -629,6 +779,18 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'scroll_area'):
             self.scroll_area.setWidget(self.canvas)
 
+    def _refresh_graph_ui(self):
+        """刷新右侧面板：path 表、track 表、图属性字段、画布。"""
+        if hasattr(self, 'train_path_table'):
+            self.refresh_train_path_table()
+        if hasattr(self, 'rail_track_table'):
+            self.rail_track_table.setRowCount(0)
+        if hasattr(self, 'graph_name_label'):
+            self.update_graph_param_fields()
+        if hasattr(self, 'canvas'):
+            self.canvas._update_size()
+            self.canvas.update()
+
     def on_open_clicked(self):
         """Switch to a different graph in the DB."""
         graphs = list_graphs_in_db(self._db)
@@ -773,25 +935,10 @@ class MainWindow(QMainWindow):
     # ── 图表参数编辑 ─────────────────────────────────────
 
     def update_graph_param_fields(self):
-        self.graph_name_field.setText(self.train_graph.name)
-        self.graph_length_field.setText(str(int(self.train_graph.length)))
-        self.graph_width_field.setText(str(int(self.train_graph.width)))
-        self.graph_scale_field.setText(str(int(self.train_graph.scale)))
+        if hasattr(self, 'graph_name_label'):
+            self.graph_name_label.setText(self.train_graph.name)
         if hasattr(self, 'scale_label'):
             self.scale_label.setText(f" {self.train_graph.scale}× ")
-
-    def on_graph_params_changed(self):
-        try:
-            self.train_graph.name = self.graph_name_field.text().strip()
-            self.train_graph.length = int(float(self.graph_length_field.text().strip()))
-            self.train_graph.width = int(float(self.graph_width_field.text().strip()))
-            self.train_graph.scale = int(float(self.graph_scale_field.text().strip()))
-        except ValueError:
-            pass
-        self.update_graph_param_fields()
-        self.canvas._update_size()
-        from models import save_train_graph_to_db
-        save_train_graph_to_db(self.train_graph, self._db)
 
     # ── 线路表 ────────────────────────────────────────────
 
