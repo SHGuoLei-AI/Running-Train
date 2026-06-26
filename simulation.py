@@ -410,20 +410,30 @@ class TrainPositioner:
 
             # 加载匹配段（仅 matched）
             match_rows = conn.execute(
-                'SELECT train_name, seg_start_seq, seg_end_seq, route_id '
+                'SELECT train_name, seg_start_seq, seg_end_seq, route_id, route_name '
                 'FROM train_route_matches '
-                'WHERE match_type=\'matched\' AND route_id IS NOT NULL '
+                'WHERE match_type=\'matched\' '
                 'ORDER BY train_name, seg_start_seq'
             ).fetchall()
 
             for mr in match_rows:
                 tn = mr['train_name']
-                seg = {
-                    'start_seq': mr['seg_start_seq'],
-                    'end_seq': mr['seg_end_seq'],
-                    'route_id': mr['route_id'],
-                }
-                self._matches.setdefault(tn, []).append(seg)
+                rid = mr['route_id']
+                rname = mr['route_name'] or ''
+                # 多经由匹配（route_id 为 NULL/0，route_name 如 R11+R9）需拆分
+                if (rid is None or rid == 0) and '+' in rname:
+                    expanded = self._expand_multi_route(
+                        tn, mr['seg_start_seq'], mr['seg_end_seq'],
+                        rname, self._trains.get(tn, []))
+                    for exp_seg in expanded:
+                        self._matches.setdefault(tn, []).append(exp_seg)
+                elif rid is not None and rid != 0:
+                    seg = {
+                        'start_seq': mr['seg_start_seq'],
+                        'end_seq': mr['seg_end_seq'],
+                        'route_id': rid,
+                    }
+                    self._matches.setdefault(tn, []).append(seg)
         finally:
             conn.close()
 
@@ -642,6 +652,47 @@ class TrainPositioner:
         a = stops[i].station_name
         b = stops[i + 1].station_name
         return self._route_index.get_tracks_between(route_id, a, b)
+
+    def _expand_multi_route(self, train_name: str, start_seq: int, end_seq: int,
+                             route_name: str, stops: list[TrainStop]) -> list[dict]:
+        """将多经由匹配（R11+R9）拆分为两个单独经由段。
+
+        在停站列表中找接续站（出现在两条经由中的车站），以此拆分。
+        如 K9756：乌鲁木齐→库尔勒(R11) + 库尔勒→若羌(R9)。
+        """
+        import re
+        parts = re.findall(r'R(\d+)', route_name)
+        if len(parts) < 2:
+            return [{'start_seq': start_seq, 'end_seq': end_seq, 'route_id': 0}]
+
+        rid_a = int(parts[0])
+        rid_b = int(parts[1])
+        sts_a = self._route_index._route_stations.get(rid_a, [])
+        sts_b = self._route_index._route_stations.get(rid_b, [])
+        if not sts_a or not sts_b:
+            return [{'start_seq': start_seq, 'end_seq': end_seq, 'route_id': 0}]
+
+        names_a = {s[1] for s in sts_a}
+        names_b = {s[1] for s in sts_b}
+
+        # 在停站中找同时出现在两条经由中的接续站
+        jn_seq = None
+        for seq in range(start_seq, end_seq + 1):
+            stn = stops[seq].station_name
+            if stn in names_a and stn in names_b:
+                jn_seq = seq
+                break
+
+        if jn_seq is None or jn_seq == start_seq or jn_seq == end_seq:
+            return [{'start_seq': start_seq, 'end_seq': end_seq, 'route_id': 0}]
+
+        result = []
+        if jn_seq > start_seq:
+            result.append({'start_seq': start_seq, 'end_seq': jn_seq, 'route_id': rid_a})
+        if jn_seq < end_seq:
+            result.append({'start_seq': jn_seq, 'end_seq': end_seq, 'route_id': rid_b})
+        return result if result else [
+            {'start_seq': start_seq, 'end_seq': end_seq, 'route_id': 0}]
 
     def visible_trains(self, minute: float) -> list[TrainPosition]:
         """获取指定时刻所有可见列车位置。"""
