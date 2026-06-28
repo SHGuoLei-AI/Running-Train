@@ -512,16 +512,20 @@ class MainWindow(QMainWindow):
         layout = QFormLayout(dlg)
 
         name_edit = QLineEdit(self.train_graph.name)
-        length_edit = QLineEdit(str(int(self.train_graph.length)))
-        width_edit = QLineEdit(str(int(self.train_graph.width)))
         ds_edit = QLineEdit(str(int(getattr(self.train_graph, 'default_scale', 1) or 1)))
         speed_edit = QLineEdit(str(config.get_default_speed()))
+        rg_ver_edit = QLineEdit(str(getattr(self.train_graph, 'rg_version', 1) or 1))
+        kl_ver_edit = QLineEdit(getattr(self.train_graph, 'kl_version', '') or '')
+        cc_ver_edit = QLineEdit(getattr(self.train_graph, 'cc_version', '') or '')
+        author_edit = QLineEdit(getattr(self.train_graph, 'author', '') or '')
 
         layout.addRow("名称:", name_edit)
-        layout.addRow("逻辑长 (km):", length_edit)
-        layout.addRow("逻辑宽 (km):", width_edit)
         layout.addRow("默认比例尺:", ds_edit)
         layout.addRow("默认速度:", speed_edit)
+        layout.addRow("RG版本:", rg_ver_edit)
+        layout.addRow("KL版本:", kl_ver_edit)
+        layout.addRow("CC版本:", cc_ver_edit)
+        layout.addRow("作者:", author_edit)
 
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         btns.accepted.connect(dlg.accept)
@@ -533,11 +537,13 @@ class MainWindow(QMainWindow):
 
         try:
             self.train_graph.name = name_edit.text().strip()
-            self.train_graph.length = int(float(length_edit.text().strip()))
-            self.train_graph.width = int(float(width_edit.text().strip()))
             self.train_graph.default_scale = int(float(ds_edit.text().strip()))
             self._default_scale = self.train_graph.default_scale
             new_speed = float(speed_edit.text().strip())
+            self.train_graph.rg_version = int(float(rg_ver_edit.text().strip()))
+            self.train_graph.kl_version = kl_ver_edit.text().strip()
+            self.train_graph.cc_version = cc_ver_edit.text().strip()
+            self.train_graph.author = author_edit.text().strip()
         except ValueError:
             QMessageBox.warning(self, "图属性", "数值格式错误。")
             return
@@ -984,10 +990,10 @@ class MainWindow(QMainWindow):
 
         # 选择方向
         from PySide6.QtWidgets import QInputDialog
-        direction_choice = QInputDialog.getItem(
+        direction_choice, ok = QInputDialog.getItem(
             self, "选择方向", f"请指定 [{line_name}] 从 {first_station} 到 {last_station} 的方向：",
             ["下行（头→尾）", "上行（头→尾）"], 0, False)
-        if not direction_choice:
+        if not ok:
             return
         is_down = 0 if direction_choice.startswith('上行') else 1
 

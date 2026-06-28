@@ -53,8 +53,8 @@ class TrainDetailPopup(QDialog):
         # Stops table
         layout.addWidget(QLabel("停站表"))
         self.stops_table = QTableWidget()
-        self.stops_table.setColumnCount(5)
-        self.stops_table.setHorizontalHeaderLabels(["序号", "站名", "到达", "出发", "里程km"])
+        self.stops_table.setColumnCount(6)
+        self.stops_table.setHorizontalHeaderLabels(["序号", "站名", "当前车次", "到达", "出发", "里程km"])
         self.stops_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.stops_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.stops_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -62,8 +62,9 @@ class TrainDetailPopup(QDialog):
         self.stops_table.horizontalHeader().setStretchLastSection(True)
         self.stops_table.setColumnWidth(0, 40)
         self.stops_table.setColumnWidth(1, 100)
-        self.stops_table.setColumnWidth(2, 60)
+        self.stops_table.setColumnWidth(2, 80)
         self.stops_table.setColumnWidth(3, 60)
+        self.stops_table.setColumnWidth(4, 60)
         layout.addWidget(self.stops_table, 1)
 
         # Matches table
@@ -106,7 +107,7 @@ class TrainDetailPopup(QDialog):
         if ti_row:
             ti = ti_row[0]
             stops = self._llt.execute(
-                'SELECT stop_seq, station_name, arrive_time, depart_time, distance_km '
+                'SELECT stop_seq, station_name, segment_train_no, arrive_time, depart_time, distance_km '
                 'FROM train_stops WHERE train_index=? ORDER BY stop_seq', (ti,)).fetchall()
         else:
             stops = []
@@ -115,7 +116,7 @@ class TrainDetailPopup(QDialog):
         for row, s in enumerate(stops):
             for col, val in enumerate(s):
                 item = QTableWidgetItem(str(val) if val is not None else '')
-                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter if col in (0, 4)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter if col in (0, 2, 5)
                                       else Qt.AlignmentFlag.AlignLeft)
                 self.stops_table.setItem(row, col, item)
 
@@ -381,7 +382,7 @@ class TrainMatchRoutesDialog(QDialog):
                       rt.from_station || '-' || rt.to_station,
                       trm.seg_start_station, trm.seg_end_station,
                       ROUND(trm.seg_distance_km), trm.route_id,
-                      trm.is_reverse, trm.is_matched
+                      trm.route_name, trm.is_reverse, trm.is_matched
                FROM train_route_matches trm
                LEFT JOIN region_trains rt ON trm.train_name = rt.train_name
                ORDER BY trm.train_name, trm.seg_start_seq''').fetchall()
@@ -398,10 +399,14 @@ class TrainMatchRoutesDialog(QDialog):
             if name not in groups:
                 groups[name] = {'origin': r[1] or '', 'segs': []}
             seg_start, seg_end = r[2], r[3]
-            dist, rid, is_rev, is_matched = r[4], r[5], r[6], r[7]
+            dist, rid, rname, is_rev, is_matched = r[4], r[5], r[6], r[7], r[8]
             if is_matched:
                 rev = '↩' if is_rev else ''
-                seg = f'[{seg_start}-{seg_end} {dist:.0f}km R{rid}{rev}]'
+                if rname:
+                    # 拼接路由（如R11+R9）直接显示route_name
+                    seg = f'[{seg_start}-{seg_end} {dist:.0f}km {rname}{rev}]'
+                else:
+                    seg = f'[{seg_start}-{seg_end} {dist:.0f}km R{rid}{rev}]'
             else:
                 seg = f'[{seg_start}-{seg_end} {dist:.0f}km未匹配]'
             groups[name]['segs'].append(seg)

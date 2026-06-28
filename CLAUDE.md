@@ -22,26 +22,24 @@
 
 列车上下行由 **track.is_down + 列车在该 track 上的走行方向** 联合判定，**不依赖车次号奇偶**。
 
-### track.is_down
-- `railway_track.is_down` = 1 表示 track 头站→尾站 方向为下行（默认）
-- = 0 表示 track 头站→尾站 方向为上行
+### track.is_down（统一为 1）
+- `railway_track.is_down` **全部为 1**：track 头站→尾站 方向 ≡ 下行
+- 列车头→尾走 = 下行，尾→头走 = 上行
+- 之前 is_down=0 的上行 path 已删除重建
 
 ### 运行时判定
 ```python
 is_forward = (entry_stn == track.head_station)  # 列车是否沿头→尾方向走
-train_is_down = track.is_down if is_forward else (1 - track.is_down)
-# 画布方向：
-direction = track.down_direction if train_is_down else track.up_direction
+train_is_down = is_forward  # 简化：is_down 恒为 1
 ```
 
 ### 复车次换号
 在 `_running()` 遍历 track 序列时，检测到 path_code 变化且前后停站 segment_train_no 不同 → 自动切换到新号。解决 C801/C804 等在大河沿（非停站）换号的问题。
 
 ### 构建 path 时的方向
-- 从 kl 构建：提示用户选择下行/上行 → 批量写入所有 track.is_down
+- 从 kl 构建：提示用户选择下行/上行 → 批量写入所有 track.is_down=1，必要时反转 track 方向
 - 直接新增 path（单 track）：默认 is_down=1（下行）
-- track 头尾延伸/插入：新 track 继承相邻已有 track 的 is_down
-- UI track 表 "头→尾" 列可点击切换
+- UI track 表 "头→尾" 列可点击切换（反转 track 方向）
 
 ## 二、经由设计流程
 
@@ -118,17 +116,18 @@ all(stops[k][1] in r_dists for k in range(i, j + 1))
 | 图内站 | 122 | 161 |
 | 图内线路 | 25 path | 39 path |
 | 图内区段 | 130 | 222 |
-| 图内车次 | 493 | 2,528 |
+| 图内车次 | 618 | 2,528 |
 
 ### 模拟模块
 
 | 指标 | 值 |
 |------|------|
-| 加载车次 | 493 (新疆) / 2,528 (上海) |
+| 加载车次 | 618 (新疆) / 2,528 (上海) |
 | 定位算法 | train_route_matches + RouteTrackIndex |
 | 多经由拼接 | 支持，覆盖跨线车次 |
+| 多实例支持 | 运行时长 > 24h 的车次同时显示多个位置 |
 
-模拟算法：TrainPositioner 使用 `train_route_matches` 中的 matched 区段，通过 RouteTrackIndex 预计算映射将经由站序映射到图内 track 序列，再进行时间比例线性插值。跨线接续站对（同站不同线、距离为 0）自动跳过。隐藏 path 参与匹配但不绘制列车。多经由拼接匹配覆盖跨线车次。
+模拟算法：TrainPositioner 使用 `train_route_matches` 中的 matched 区段，通过 RouteTrackIndex 预计算映射将经由站序映射到图内 track 序列，再进行时间比例线性插值。跨线接续站对（同站不同线、距离为 0）自动跳过。隐藏 path 参与匹配但不绘制列车。多经由拼接匹配覆盖跨线车次。**时间归一化**使用单调递增算法（while-loop +1440），自动处理多日行程（如 K316/K317 重庆西→喀什 52h）。长途车次在 24h 模拟周期内可出现 2-3 个实例。
 
 ## 六、数据架构
 
@@ -147,7 +146,7 @@ data/
 
 rg.db 维护：`meta.kl_version` ↔ `kl.db.meta.version`
 
-## 七、相关脚本
+## 七、相关脚本与模块
 
 | 脚本 | 用途 |
 |------|------|
@@ -160,7 +159,9 @@ rg.db 维护：`meta.kl_version` ↔ `kl.db.meta.version`
 | `tools/check_kl_route51.py` | 查询kl线路数据辅助排查 |
 | `route_finder.py` | 自动BFS搜索两站间路径（辅助工具） |
 | `tools/migrate_json_to_db.py` | JSON→DB 迁移（已执行） |
-| `simulation.py` | 模拟引擎：RouteTrackIndex + TrainPositioner + SimulationClock + TrainRenderer |
+| `simulation.py` | 模拟引擎：RouteTrackIndex + TrainPositioner + SimulationClock + TrainRenderer；多日时间归一化 + 多实例定位 |
 | `sim_controls.py` | 模拟控制面板 |
 | `canvas.py` | 画布：Pass 1(线路) + Pass 2(站名) + Pass 3(列车) |
-| `models.py` | 数据模型：TrainGraph、RailwayPath、RailwayTrack（含方向字段） |
+| `models.py` | 数据模型：TrainGraph（已移除 length/width，scale 运行时可变不持久化）、RailwayPath、RailwayTrack |
+| `train_match_dialogs.py` | 车次详情/匹配路由对话框（停站表含当前车次列、RNone 修复） |
+| `main_window.py` | 主窗口：图属性对话框含 meta 字段（rg/kl/cc版本、作者） |

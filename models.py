@@ -5,10 +5,8 @@ import sqlite3
 
 class TrainGraph:
     """列车运行图类"""
-    def __init__(self, name, length=1000, width=600, scale=1, **kwargs):
+    def __init__(self, name, scale=1, **kwargs):
         self.name = name
-        self.length = length
-        self.width = width
         self.scale = scale
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -90,8 +88,8 @@ def load_train_graph_from_json(json_file_path):
     with open(json_file_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
     g = data['TrainGraph']
-    train_graph = TrainGraph(name=g['name'], length=g['length'], width=g['width'],
-                             scale=g.get('scale', 1))
+    train_graph = TrainGraph(name=g['name'],
+                             scale=g.get('default_scale', g.get('scale', 1)))
     for p_data in g['paths']:
         path = RailwayPath(path_id=p_data['id'], name=p_data['name'],
                            start_x=p_data['start_x'], start_y=p_data['start_y'],
@@ -115,9 +113,7 @@ def save_train_graph_to_json(train_graph, file_path, routes=None, route_stations
             "date": "",
             "author": "",
             "name": train_graph.name,
-            "length": train_graph.length,
-            "width": train_graph.width,
-            "scale": train_graph.scale,
+            "default_scale": getattr(train_graph, 'default_scale', 1) or 1,
             "paths": [
                 {
                     "id": p.id,
@@ -168,19 +164,19 @@ def load_train_graph_from_db(db, graph_name=None):
     conn, own = _resolve_db(db)
     try:
         g = conn.execute(
-            'SELECT name, length, width, scale, default_scale, default_speed, '
+            'SELECT name, scale, default_scale, default_speed, '
             'rg_version, kl_version, cc_version, author '
             'FROM train_graph LIMIT 1').fetchone()
         if not g:
             raise ValueError('No train_graph found in database')
         train_graph = TrainGraph(
-            name=g[0], length=g[1], width=g[2], scale=g[3],
-            default_scale=g[4] if g[4] is not None else g[3],
-            default_speed=g[5] if g[5] is not None else 1.0,
-            rg_version=g[6] if len(g) > 6 and g[6] is not None else 1,
-            kl_version=g[7] if len(g) > 7 and g[7] is not None else '',
-            cc_version=g[8] if len(g) > 8 and g[8] is not None else '',
-            author=g[9] if len(g) > 9 and g[9] is not None else '')
+            name=g[0], scale=(g[2] if g[2] is not None else g[1]) or 1,
+            default_scale=g[2] if g[2] is not None else g[1],
+            default_speed=g[3] if g[3] is not None else 1.0,
+            rg_version=g[4] if len(g) > 4 and g[4] is not None else 1,
+            kl_version=g[5] if len(g) > 5 and g[5] is not None else '',
+            cc_version=g[6] if len(g) > 6 and g[6] is not None else '',
+            author=g[7] if len(g) > 7 and g[7] is not None else '')
 
         paths = conn.execute(
             'SELECT id, name, kl_line_name, start_x, start_y, angle, hidden '
@@ -231,13 +227,13 @@ def save_train_graph_to_db(train_graph, db):
         conn.execute('DELETE FROM railway_track')
         conn.execute('DELETE FROM railway_path')
 
+        ds = getattr(train_graph, 'default_scale', 1) or 1
         conn.execute(
             'INSERT OR REPLACE INTO train_graph '
-            '(name, length, width, scale, default_scale, default_speed, '
+            '(name, scale, default_scale, default_speed, '
             'rg_version, kl_version, cc_version, author) '
-            'VALUES (?,?,?,?,?,?,?,?,?,?)',
-            (train_graph.name, train_graph.length, train_graph.width, train_graph.scale,
-             getattr(train_graph, 'default_scale', train_graph.scale) or train_graph.scale,
+            'VALUES (?,?,?,?,?,?,?,?)',
+            (train_graph.name, ds, ds,
              getattr(train_graph, 'default_speed', 1.0) or 1.0,
              getattr(train_graph, 'rg_version', 1) or 1,
              getattr(train_graph, 'kl_version', '') or '',

@@ -439,46 +439,58 @@ class TrainPositioner:
 
     # ── 定位 ────────────────────────────────────────────
 
-    def position(self, train_name: str, minute: float) -> Optional[TrainPosition]:
-        """计算一趟车在指定时刻的画布位置。
+    def position(self, train_name: str, minute: float) -> list[TrainPosition]:
+        """计算一趟车在指定时刻的全部画布位置（多日行程可返回多个实例）。
 
         仅当列车位于匹配段内时才返回位置（否则视为图外，不画）。
         始发站开车前5分钟出现，终到站到达后5分钟消失。
         """
         stops = self._trains.get(train_name)
         if not stops or len(stops) < 2:
-            return None
+            return []
 
         first_dep = stops[0].dep_min
         last_arr = stops[-1].arr_min
         if first_dep is None or last_arr is None:
-            return None
+            return []
 
-        # — 归一化时间 —
+        # — 归一化时间（单调递增，自动处理多日行程）—
         norm: list[tuple[Optional[int], Optional[int]]] = []
+        prev = first_dep
         for s in stops:
             a = s.arr_min
             d = s.dep_min
-            if a is not None and a < first_dep:
-                a += 1440
-            if d is not None and d < first_dep:
-                d += 1440
+            if a is not None:
+                while a < prev:
+                    a += 1440
+                prev = a
+            if d is not None:
+                while d < prev:
+                    d += 1440
+                prev = d
             norm.append((a, d))
 
+        norm_last_arr = norm[-1][0]
+
+        # — 找最小的 T ≥ first_dep − 5 —
         T = minute
-        if T < first_dep:
+        while T < first_dep - 5:
             T += 1440
 
-        # 5分钟规则：始发前5分钟出现，终到后5分钟消失
-        if T < first_dep - 5:
-            return None
-        if last_arr is not None:
-            la = last_arr
-            if la < first_dep:
-                la += 1440
-            if T > la + 5:
-                return None
+        # — 遍历所有可能的日期偏移（每1440分钟一个实例）—
+        result = []
+        while norm_last_arr is not None and T <= norm_last_arr + 5:
+            pos = self._position_at(stops, norm, train_name, T)
+            if pos is not None:
+                result.append(pos)
+            T += 1440
 
+        return result
+
+    def _position_at(self, stops: list[TrainStop],
+                     norm: list[tuple[Optional[int], Optional[int]]],
+                     train_name: str, T: int) -> Optional[TrainPosition]:
+        """在归一化时刻 T 定位列车。"""
         # — 找到 T 所在的停站区间 —
         for i in range(len(stops)):
             arr_i, dep_i = norm[i]
@@ -695,12 +707,10 @@ class TrainPositioner:
             {'start_seq': start_seq, 'end_seq': end_seq, 'route_id': 0}]
 
     def visible_trains(self, minute: float) -> list[TrainPosition]:
-        """获取指定时刻所有可见列车位置。"""
+        """获取指定时刻所有可见列车位置（多日车次可出现多次）。"""
         result = []
         for train_name in self._trains:
-            pos = self.position(train_name, minute)
-            if pos is not None:
-                result.append(pos)
+            result.extend(self.position(train_name, minute))
         return result
 
     @property
