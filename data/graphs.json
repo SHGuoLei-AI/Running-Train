@@ -9,11 +9,17 @@
             "id": "shanghai",
             "rg_db": "data/rg-shanghai.db",
             "rt_db": "data/rt-shanghai.db"
+        },
+        {
+            "id": "chuanyu",
+            "rg_db": "data/rg-chuanyu.db",
+            "rt_db": "data/rt-chuanyu.db"
         }
     ],
-    "active": "xinjiang",
+    "active": "chuanyu",
     "recent": [
-        "xinjiang",
-        "shanghai"
+        "chuanyu",
+        "shanghai",
+        "xinjiang"
     ]
 }

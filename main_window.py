@@ -466,8 +466,8 @@ class MainWindow(QMainWindow):
                 route_id INTEGER REFERENCES routes(id), seq INTEGER NOT NULL,
                 station_name TEXT NOT NULL, line_name TEXT NOT NULL, cum_distance INTEGER DEFAULT 0,
                 is_junction INTEGER DEFAULT 0);
-            INSERT INTO train_graph VALUES (?, 1000, 600, 1, 1, 1.0, 1, '', '', '');
-        ''', (gid,))
+        ''')
+        conn.execute('INSERT INTO train_graph VALUES (?, 1000, 600, 1, 1, 1.0, 1, \'\', \'\', \'\')', (gid,))
         conn.commit()
         conn.close()
 
