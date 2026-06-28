@@ -30,46 +30,71 @@ class DrawingCanvas(QWidget):
         self.update()
 
     def mouseMoveEvent(self, event):
-        """跟踪鼠标位置，查找附近端点或列车，发射状态文本"""
+        """跟踪鼠标位置，查找附近线路、车站、列车，发射状态文本"""
         scale = self.train_graph.scale
         px = event.position().x()
         py = event.position().y()
         km_x = px / scale if scale else 0
         km_y = py / scale if scale else 0
 
-        nearby = self._find_nearby_station(px, py)
-        if nearby:
-            stn_name, stn_km_x, stn_km_y = nearby
-            status = f" X：{km_x:.0f} km，Y：{km_y:.0f} km （{stn_name}站， X：{stn_km_x:.0f} Y：{stn_km_y:.0f}）"
-        else:
-            status = f" X：{km_x:.0f} km，Y：{km_y:.0f} km"
+        lines = self._find_nearby_lines(px, py)
+        stations = self._find_nearby_stations(px, py)
+        trains = self._find_nearby_trains(px, py)
 
-        # 检查鼠标是否靠近某个列车圆
-        train_name = self._find_nearby_train(px, py)
-        if train_name:
-            status += f" |||{train_name}|||"
+        # 格式：坐标；线路；车站；车次
+        status = f"X：{km_x:.0f} km，Y：{km_y:.0f} km"
+        if lines:
+            status += f"；线路：{'、'.join(lines)}"
+        if stations:
+            status += f"；车站：{'、'.join(stations)}"
+        if trains:
+            for t in trains:
+                status += f"|||{t}|||"
 
         self.mouse_status.emit(status)
         super().mouseMoveEvent(event)
 
-    def _find_nearby_train(self, px: float, py: float) -> str | None:
-        """查找鼠标像素坐标附近最近的列车圆点。
-        返回 train_name 或 None。"""
-        best_dist = self.NEARBY_THRESHOLD
-        best: str | None = None
-        for pos in self._train_positions:
-            d = math.hypot(px - pos.x, py - pos.y)
-            if d < best_dist:
-                best_dist = d
-                best = pos.train_name or pos.label
-        return best
+    @staticmethod
+    def _point_to_segment_distance(px: float, py: float,
+                                    x1: float, y1: float,
+                                    x2: float, y2: float) -> float:
+        """点到线段的最短距离。"""
+        dx = x2 - x1
+        dy = y2 - y1
+        if dx == 0 and dy == 0:
+            return math.hypot(px - x1, py - y1)
+        t = max(0, min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)))
+        return math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
 
-    def _find_nearby_station(self, px: float, py: float) -> tuple | None:
-        """查找鼠标像素坐标附近最近的 track 端点。
-        返回 (站名, 站km_x, 站km_y) 或 None。"""
+    def _find_nearby_lines(self, px: float, py: float) -> list[str]:
+        """查找鼠标附近所有线路名（track 线段到鼠标距离 < NEARBY_THRESHOLD）。"""
         scale = self.train_graph.scale
-        best_dist = self.NEARBY_THRESHOLD
-        best: tuple | None = None
+        nearby: list[str] = []
+        seen: set[str] = set()
+
+        for path in self.train_graph.train_paths:
+            if path.hidden:
+                continue
+            for track in path.tracks:
+                sx, sy = track.start_point
+                x1 = sx * scale
+                y1 = sy * scale
+                ex, ey = track.end_point()
+                x2 = ex * scale
+                y2 = ey * scale
+
+                dist = self._point_to_segment_distance(px, py, x1, y1, x2, y2)
+                if dist < self.NEARBY_THRESHOLD and path.name not in seen:
+                    nearby.append(path.name)
+                    seen.add(path.name)
+                    break  # 每个 path 只需一个 track 命中
+        return nearby
+
+    def _find_nearby_stations(self, px: float, py: float) -> list[str]:
+        """查找鼠标附近所有站名（track 端点距离 < NEARBY_THRESHOLD）。"""
+        scale = self.train_graph.scale
+        nearby: list[str] = []
+        seen: set[str] = set()
 
         for track in self.train_graph.get_all_tracks():
             sx, sy = track.start_point
@@ -79,19 +104,30 @@ class DrawingCanvas(QWidget):
             tx = ex * scale
             ty = ey * scale
 
-            # 检查 head 端点
             dh = math.hypot(px - hx, py - hy)
-            if dh < best_dist:
-                best_dist = dh
-                best = (track.head_station, sx, sy)
+            if dh < self.NEARBY_THRESHOLD and track.head_station not in seen:
+                nearby.append(track.head_station)
+                seen.add(track.head_station)
 
-            # 检查 tail 端点
             dt = math.hypot(px - tx, py - ty)
-            if dt < best_dist:
-                best_dist = dt
-                best = (track.tail_station, ex, ey)
+            if dt < self.NEARBY_THRESHOLD and track.tail_station not in seen:
+                nearby.append(track.tail_station)
+                seen.add(track.tail_station)
 
-        return best
+        return nearby
+
+    def _find_nearby_trains(self, px: float, py: float) -> list[str]:
+        """查找鼠标附近所有列车名（列车圆距离 < NEARBY_THRESHOLD）。"""
+        nearby: list[str] = []
+        seen: set[str] = set()
+        for pos in self._train_positions:
+            d = math.hypot(px - pos.x, py - pos.y)
+            if d < self.NEARBY_THRESHOLD:
+                name = (pos.train_name or pos.label).strip()
+                if name and name not in seen:
+                    nearby.append(name)
+                    seen.add(name)
+        return nearby
 
     def _update_size(self):
         scale = self.train_graph.scale

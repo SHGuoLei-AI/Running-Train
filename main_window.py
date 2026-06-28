@@ -445,8 +445,8 @@ class MainWindow(QMainWindow):
         import sqlite3
         conn = sqlite3.connect(rg_path)
         conn.executescript('''
-            CREATE TABLE train_graph (name TEXT PRIMARY KEY, length INTEGER, width INTEGER,
-                scale INTEGER DEFAULT 1, default_scale INTEGER DEFAULT 1,
+            CREATE TABLE train_graph (name TEXT PRIMARY KEY,
+                default_scale INTEGER DEFAULT 1,
                 default_speed REAL DEFAULT 1.0, rg_version INTEGER DEFAULT 1,
                 kl_version TEXT DEFAULT '', cc_version TEXT DEFAULT '',
                 author TEXT DEFAULT '');
@@ -467,7 +467,9 @@ class MainWindow(QMainWindow):
                 station_name TEXT NOT NULL, line_name TEXT NOT NULL, cum_distance INTEGER DEFAULT 0,
                 is_junction INTEGER DEFAULT 0);
         ''')
-        conn.execute('INSERT INTO train_graph VALUES (?, 1000, 600, 1, 1, 1.0, 1, \'\', \'\', \'\')', (gid,))
+        conn.execute(
+            'INSERT INTO train_graph (name, default_scale, default_speed, rg_version, kl_version, cc_version, author) '
+            'VALUES (?, 1, 1.0, 1, \'\', \'\', \'\')', (gid,))
         conn.commit()
         conn.close()
 
@@ -540,6 +542,7 @@ class MainWindow(QMainWindow):
             self.train_graph.default_scale = int(float(ds_edit.text().strip()))
             self._default_scale = self.train_graph.default_scale
             new_speed = float(speed_edit.text().strip())
+            self.train_graph.default_speed = new_speed
             self.train_graph.rg_version = int(float(rg_ver_edit.text().strip()))
             self.train_graph.kl_version = kl_ver_edit.text().strip()
             self.train_graph.cc_version = cc_ver_edit.text().strip()
@@ -1539,12 +1542,16 @@ class MainWindow(QMainWindow):
         if '|||' in text:
             parts = text.split('|||')
             base = parts[0]
-            train_name = parts[1] if len(parts) > 1 else ''
-            info = self._train_info.get(train_name, (None, None))
-            if info[0] and info[1]:
-                base += f'  [{train_name}，{info[0]} -- {info[1]}]'
-            else:
-                base += f'  [{train_name}]'
+            train_names = [p.strip() for p in parts[1:] if p.strip()]
+            train_strs = []
+            for name in train_names:
+                info = self._train_info.get(name, (None, None))
+                if info[0] and info[1]:
+                    train_strs.append(f'{name}（{info[0]} - {info[1]}）')
+                else:
+                    train_strs.append(name)
+            if train_strs:
+                base += f'；车次：{"、".join(train_strs)}'
             self._status_label.setText(base)
         else:
             self._status_label.setText(text)

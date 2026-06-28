@@ -4,19 +4,19 @@
 
 ## 当前状态
 
-| 指标 | 新疆 | 上海 |
-|------|------|------|
-| 图内线路 | 25 path | 39 path |
-| 图内区段 | 130 | 222 |
-| 图内站 | 122 | 161 |
-| 经由总数 | 20 | 51 |
-| 经由站序 | 257 | 788 |
-| 图内车次 | 493 | 2,528 |
-| 匹配段数 | 286 | 2,943 |
+| 指标 | 新疆 | 上海 | 川渝 |
+|------|------|------|------|
+| 图内线路 | 25 path | 39 path | 15 path |
+| 图内区段 | 130 | 222 | 256 |
+| 图内站 | 122 | 161 | — |
+| 经由总数 | 20 | 51 | — |
+| 经由站序 | 257 | 788 | — |
+| 图内车次 | 493 | 2,528 | — |
+| 匹配段数 | 286 | 2,943 | — |
 
 | 客里表线路 | 756 条，6654 站 |
 | 时刻表车次 | 17,168 趟，150,841 停站 |
-| 客里表修订 | 6 项（[kl_revisions.md](data/kl_revisions.md)） |
+| 客里表修订 | 9 项（[kl_revisions.md](data/kl_revisions.md)） |
 
 ## 数据架构
 
@@ -28,6 +28,9 @@ data/
 ├── rt-xinjiang.db    # 图上车次 — 新疆区域
 ├── rg-shanghai.db    # 几何结构 — 上海区域
 ├── rt-shanghai.db    # 图上车次 — 上海区域
+├── rg-chuanyu.db     # 几何结构 — 川渝区域
+├── rt-chuanyu.db     # 图上车次 — 川渝区域
+├── kl_revisions.md   # 客里表修订记录
 ├── graphs.json       # 图配置文件（仅 id + 路径）
 ├── setup.json        # 全局设置（auto_backup 等）
 ├── backup/           # 自动备份 (不入 git)
@@ -46,10 +49,11 @@ graphs.json:
 {
     "graphs": [
         {"id": "xinjiang", "rg_db": "data/rg-xinjiang.db", "rt_db": "data/rt-xinjiang.db"},
-        {"id": "shanghai", "rg_db": "data/rg-shanghai.db", "rt_db": "data/rt-shanghai.db"}
+        {"id": "shanghai", "rg_db": "data/rg-shanghai.db", "rt_db": "data/rt-shanghai.db"},
+        {"id": "chuanyu",  "rg_db": "data/rg-chuanyu.db",  "rt_db": "data/rt-chuanyu.db"}
     ],
-    "active": "shanghai",
-    "recent": ["shanghai", "xinjiang"]
+    "active": "chuanyu",
+    "recent": ["chuanyu", "xinjiang", "shanghai"]
 }
 ```
 
@@ -131,7 +135,8 @@ running_train/
 ├── CLAUDE.md                # AI 协作方法论
 ├── .gitignore
 ├── data/
-│   ├── kl.db, cc.db, rg.db, rt.db
+│   ├── kl.db, cc.db, rg-*.db, rt-*.db
+│   ├── kl_revisions.md
 │   ├── 数据结构.md
 │   ├── backup/              # 自动备份（gitignore）
 │   └── old/                 # 归档（gitignore）
@@ -163,13 +168,13 @@ running_train/
 
 ### 定位覆盖率
 
-| 指标 | 值 |
-|------|------|
-| 加载车次 | 2,528 |
-| 匹配上车次 | 2,302 (91.1%) |
-| 全匹配车次 | 399（所有区段均匹配） |
-| 部分匹配车次 | 1,903（至少一个区段匹配） |
-| 零匹配车次 | 226 |
+| 指标 | 上海 | 新疆 |
+|------|------|------|
+| 加载车次 | 2,528 | 618 |
+| 匹配上车次 | 2,302 (91.1%) | 561 (90.8%) |
+| 全匹配车次 | 399（所有区段均匹配） | — |
+| 部分匹配车次 | 1,903（至少一个区段匹配） | — |
+| 零匹配车次 | 226 | 57 |
 
 > RouteTrackIndex 为每条经由预计算所有相邻站序对→图内 track 序列。跨线接续站对（同站不同线、距离 0）自动跳过。隐藏 path 参与匹配但不绘制列车。
 
@@ -181,6 +186,13 @@ python main.py
 ```
 
 ## 最近更新
+
+### 2026-06-28
+- **川渝图**：新建 川渝（chuanyu）图，含 成渝中线/成达万/新渝万高铁（15 path, 256 tracks）
+- **客里表修订**：新增 成渝中线高铁（8站290km）、成达万高铁（11站416km）、新渝万高铁（5站251km）
+- **图属性修复**：`train_graph` 表 INSERT OR REPLACE 未清理旧行导致多行并存、属性读取混乱 — 改为 DELETE 后 INSERT；清理 `length`/`width`/`scale` 残留列
+- **状态栏增强**：鼠标悬停显示 坐标、线路、车站、车次（允许多个）
+- **新建图修复**：`executescript` 不支持参数占位符 `?`，拆分为独立 `execute()` 调用
 
 ### 2026-06-25
 - **经由匹配定位**：模拟引擎从 BFS 改为 RouteTrackIndex，定位覆盖率 ~91%（~2,302/2,528 车次）
