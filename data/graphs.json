@@ -16,10 +16,10 @@
             "rt_db": "data/rt-chuanyu.db"
         }
     ],
-    "active": "chuanyu",
+    "active": "shanghai",
     "recent": [
-        "chuanyu",
+        "shanghai",
         "xinjiang",
-        "shanghai"
+        "chuanyu"
     ]
 }

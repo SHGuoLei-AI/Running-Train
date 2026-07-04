@@ -58,6 +58,7 @@ class MainWindow(QMainWindow):
         # 菜单栏
         self.menu_graph = self.menuBar().addMenu("图(&G)")
         self.menu_routes = self.menuBar().addMenu("经由(&R)")
+        self.menu_trains = self.menuBar().addMenu("车次(&C)")
         self.menu_tools = self.menuBar().addMenu("工具(&T)")
         self.menu_settings = self.menuBar().addMenu("设置(&S)")
         self.menu_help = self.menuBar().addMenu("帮助(&H)")
@@ -70,7 +71,11 @@ class MainWindow(QMainWindow):
         self.action_route_match = self.menu_routes.addAction("车次匹配...")
         self.menu_routes.addSeparator()
         self.action_route_matched_trains = self.menu_routes.addAction("经由匹配的车次")
-        self.action_train_matched_routes = self.menu_routes.addAction("车次匹配的经由")
+        # 车次菜单
+        self.action_import_trains = self.menu_trains.addAction("导入车次")
+        self.menu_trains.addSeparator()
+        self.action_train_list = self.menu_trains.addAction("车次列表...")
+        # 工具菜单
         self.action_update_schedule = self.menu_tools.addAction("更新时刻表...")
         self.action_update_kl = self.menu_tools.addAction("更新里程表...")
         self.action_auto_backup = QAction("自动备份", self)
@@ -250,7 +255,8 @@ class MainWindow(QMainWindow):
         self.action_route_editor.triggered.connect(self.on_route_editor_clicked)
         self.action_route_match.triggered.connect(self.on_route_match_clicked)
         self.action_route_matched_trains.triggered.connect(self.on_route_matched_trains_clicked)
-        self.action_train_matched_routes.triggered.connect(self.on_train_matched_routes_clicked)
+        self.action_import_trains.triggered.connect(self._on_import_trains)
+        self.action_train_list.triggered.connect(self.on_train_list_clicked)
         self.action_update_schedule.triggered.connect(self.on_update_schedule_clicked)
         self.action_update_kl.triggered.connect(self.on_update_kl_clicked)
         self.action_auto_backup.triggered.connect(self.on_auto_backup_toggled)
@@ -372,12 +378,6 @@ class MainWindow(QMainWindow):
         self.action_export_json.triggered.connect(self.on_export_json_clicked)
         self.action_import_json = self.menu_graph.addAction("导入 JSON...")
         self.action_import_json.triggered.connect(self.on_import_json_clicked)
-
-        self.menu_graph.addSeparator()
-
-        # — 导入车次 —
-        self.action_import_trains = self.menu_graph.addAction("导入车次")
-        self.action_import_trains.triggered.connect(self._on_import_trains)
 
     def _on_switch_graph(self, graph_id: str):
         """切换激活图并重新加载。"""
@@ -714,7 +714,7 @@ class MainWindow(QMainWindow):
         dlg = RouteMatchTrainsDialog(self)
         dlg.exec()
 
-    def on_train_matched_routes_clicked(self):
+    def on_train_list_clicked(self):
         from train_match_dialogs import TrainMatchRoutesDialog
         dlg = TrainMatchRoutesDialog(self)
         dlg.exec()
@@ -1519,6 +1519,17 @@ class MainWindow(QMainWindow):
             return
         rt_path = config.get_rt_path()
         self._positioner = TrainPositioner(rt_path, self._db, self.train_graph)
+        # 重新加载车次→起讫站映射（换图后 region_trains 已变化）
+        self._train_info = {}
+        try:
+            rt_conn = sqlite3.connect(rt_path)
+            rows = rt_conn.execute(
+                'SELECT train_name, from_station, to_station FROM region_trains'
+            ).fetchall()
+            self._train_info = {r[0]: (r[1], r[2]) for r in rows}
+            rt_conn.close()
+        except Exception:
+            pass
         # 立即用当前时钟时间刷新列车位置
         self._on_sim_tick(self._sim_clock.current_minute)
 

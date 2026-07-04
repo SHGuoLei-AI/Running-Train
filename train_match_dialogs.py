@@ -19,8 +19,15 @@ except Exception:
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CC_PATH = os.path.join(BASE_DIR, 'data', 'cc.db')
-RG_PATH = config.get_rg_path()
-RT_PATH = config.get_rt_path()
+
+
+def _get_rg_path():
+    return config.get_rg_path()
+
+def _get_rt_path():
+    return config.get_rt_path()
+
+
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -36,7 +43,7 @@ class TrainDetailPopup(QDialog):
         self.resize(700, 550)
         self.setMinimumSize(550, 400)
 
-        self._db = sqlite3.connect(RT_PATH)
+        self._db = sqlite3.connect(_get_rt_path())
         self._llt = sqlite3.connect(CC_PATH)
 
         self._setup_ui()
@@ -175,8 +182,8 @@ class RouteMatchTrainsDialog(QDialog):
         self.resize(1000, 600)
         self.setMinimumSize(800, 450)
 
-        self._rg = sqlite3.connect(RG_PATH)
-        self._rt = sqlite3.connect(RT_PATH)
+        self._rg = sqlite3.connect(_get_rg_path())
+        self._rt = sqlite3.connect(_get_rt_path())
 
         self._setup_ui()
         self._load_routes()
@@ -316,16 +323,16 @@ class RouteMatchTrainsDialog(QDialog):
 # TrainMatchRoutesDialog — "车次匹配的经由"
 # ═══════════════════════════════════════════════════════════════════
 class TrainMatchRoutesDialog(QDialog):
-    """Show matching results from the DB match table."""
+    """车次列表：查看匹配结果、清洗非数字结尾车次。"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("车次匹配的经由")
+        self.setWindowTitle("车次列表")
         self.resize(950, 550)
         self.setMinimumSize(600, 400)
 
-        self._rg = sqlite3.connect(RG_PATH)
-        self._rt = sqlite3.connect(RT_PATH)
+        self._rg = sqlite3.connect(_get_rg_path())
+        self._rt = sqlite3.connect(_get_rt_path())
 
         self._setup_ui()
         self._load_from_db()
@@ -360,7 +367,7 @@ class TrainMatchRoutesDialog(QDialog):
         self.status_label = QLabel("")
         layout.addWidget(self.status_label)
 
-        # Bottom row: toggle + close
+        # Bottom row: toggle + clean + close
         bottom_row = QHBoxLayout()
         self.btn_toggle_zero = QPushButton("只显示0匹配")
         self.btn_toggle_zero.setCheckable(True)
@@ -369,11 +376,65 @@ class TrainMatchRoutesDialog(QDialog):
         self.btn_in_graph = QPushButton("图内未匹配区段")
         self.btn_in_graph.clicked.connect(self._on_show_in_graph_unmatched)
         bottom_row.addWidget(self.btn_in_graph)
+        self.btn_clean_trains = QPushButton("清洗车次")
+        self.btn_clean_trains.setToolTip("删除所有不以数字结尾的车次")
+        self.btn_clean_trains.clicked.connect(self._on_clean_trains)
+        bottom_row.addWidget(self.btn_clean_trains)
         bottom_row.addStretch()
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         btn_box.rejected.connect(self.close)
         bottom_row.addWidget(btn_box)
         layout.addLayout(bottom_row)
+
+    def _on_clean_trains(self):
+        """删除所有不以数字结尾的车次。"""
+        from PySide6.QtWidgets import QMessageBox
+
+        all_trains = self._rt.execute(
+            'SELECT train_name FROM region_trains').fetchall()
+        to_delete = [t[0] for t in all_trains if not re.search(r'\d$', t[0])]
+
+        if not to_delete:
+            QMessageBox.information(self, "清洗车次", "没有需要清洗的车次。")
+            return
+
+        reply = QMessageBox.question(
+            self, "确认清洗",
+            f"将删除 {len(to_delete)} 个非数字结尾的车次：\n\n"
+            + '、'.join(to_delete[:20])
+            + (f'\n... 等共 {len(to_delete)} 个' if len(to_delete) > 20 else ''),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        deleted_stops = 0
+        deleted_matches = 0
+        for name in to_delete:
+            c = self._rt.execute(
+                'SELECT COUNT(*) FROM train_stops WHERE train_name=?',
+                (name,)).fetchone()
+            deleted_stops += c[0] if c else 0
+            m = self._rt.execute(
+                'SELECT COUNT(*) FROM train_route_matches WHERE train_name=?',
+                (name,)).fetchone()
+            deleted_matches += m[0] if m else 0
+
+            self._rt.execute(
+                'DELETE FROM train_route_matches WHERE train_name=?', (name,))
+            self._rt.execute(
+                'DELETE FROM train_stops WHERE train_name=?', (name,))
+            self._rt.execute(
+                'DELETE FROM region_trains WHERE train_name=?', (name,))
+
+        self._rt.commit()
+
+        QMessageBox.information(
+            self, "清洗完成",
+            f"已删除 {len(to_delete)} 个车次\n"
+            f"（含 {deleted_stops} 条停站记录，{deleted_matches} 条匹配记录）。")
+
+        self._load_from_db()
 
     def _load_from_db(self):
         """Read match results from train_route_matches table."""

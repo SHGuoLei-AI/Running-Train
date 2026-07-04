@@ -12,9 +12,14 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 import config
 
-DB_PATH = config.get_rg_path()
-RT_PATH = config.get_rt_path()
 KL_PATH = os.path.join(os.path.dirname(__file__), 'data', 'kl.db')
+
+
+def _get_rg_path():
+    return config.get_rg_path()
+
+def _get_rt_path():
+    return config.get_rt_path()
 
 
 class RouteEditorDialog(QDialog):
@@ -24,7 +29,7 @@ class RouteEditorDialog(QDialog):
         self.resize(1000, 600)
         self.setMinimumSize(800, 450)
 
-        self._db = sqlite3.connect(DB_PATH)
+        self._db = sqlite3.connect(_get_rg_path())
         self._kl = sqlite3.connect(KL_PATH)
         self._routes = []  # list of (id, name, start, end, total_km)
         self._stations = {}  # route_id -> list of (seq, station, line, cum_km, is_junction)
@@ -363,7 +368,7 @@ class RouteEditorDialog(QDialog):
         from tools.match_trains import run_matching_with_progress
 
         cc_path = os.path.join(os.path.dirname(__file__), 'data', 'cc.db')
-        run_matching_with_progress(self, self._db, cc_path, RT_PATH)
+        run_matching_with_progress(self, self._db, cc_path, _get_rt_path())
 
     # ── Add new route ────────────────────────────────────
 

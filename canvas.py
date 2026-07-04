@@ -46,7 +46,7 @@ class DrawingCanvas(QWidget):
         if lines:
             status += f"；线路：{'、'.join(lines)}"
         if stations:
-            status += f"；车站：{'、'.join(stations)}"
+            status += f"；车站：{'、'.join(f'{s[0]}(X：{s[1]:.0f}, Y：{s[2]:.0f})' for s in stations)}"
         if trains:
             for t in trains:
                 status += f"|||{t}|||"
@@ -90,10 +90,10 @@ class DrawingCanvas(QWidget):
                     break  # 每个 path 只需一个 track 命中
         return nearby
 
-    def _find_nearby_stations(self, px: float, py: float) -> list[str]:
-        """查找鼠标附近所有站名（track 端点距离 < NEARBY_THRESHOLD）。"""
+    def _find_nearby_stations(self, px: float, py: float) -> list[tuple[str, float, float]]:
+        """查找鼠标附近所有车站 (站名, km_x, km_y)。"""
         scale = self.train_graph.scale
-        nearby: list[str] = []
+        nearby: list[tuple[str, float, float]] = []
         seen: set[str] = set()
 
         for track in self.train_graph.get_all_tracks():
@@ -106,12 +106,12 @@ class DrawingCanvas(QWidget):
 
             dh = math.hypot(px - hx, py - hy)
             if dh < self.NEARBY_THRESHOLD and track.head_station not in seen:
-                nearby.append(track.head_station)
+                nearby.append((track.head_station, sx, sy))
                 seen.add(track.head_station)
 
             dt = math.hypot(px - tx, py - ty)
             if dt < self.NEARBY_THRESHOLD and track.tail_station not in seen:
-                nearby.append(track.tail_station)
+                nearby.append((track.tail_station, ex, ey))
                 seen.add(track.tail_station)
 
         return nearby
