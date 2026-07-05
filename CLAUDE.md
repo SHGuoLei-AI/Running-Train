@@ -126,8 +126,9 @@ all(stops[k][1] in r_dists for k in range(i, j + 1))
 | 定位算法 | train_route_matches + RouteTrackIndex |
 | 多经由拼接 | 支持，覆盖跨线车次 |
 | 多实例支持 | 运行时长 > 24h 的车次同时显示多个位置 |
+| 车站状态 | 左侧控制面板下方，下拉框选站 + 站内列车列表（始发/终到/经停，6 种形状） |
 
-模拟算法：TrainPositioner 使用 `train_route_matches` 中的 matched 区段，通过 RouteTrackIndex 预计算映射将经由站序映射到图内 track 序列，再进行时间比例线性插值。跨线接续站对（同站不同线、距离为 0）自动跳过。隐藏 path 参与匹配但不绘制列车。多经由拼接匹配覆盖跨线车次。**时间归一化**使用单调递增算法（while-loop +1440），自动处理多日行程（如 K316/K317 重庆西→喀什 52h）。长途车次在 24h 模拟周期内可出现 2-3 个实例。
+模拟算法：TrainPositioner 使用 `train_route_matches` 中的 matched 区段，通过 RouteTrackIndex 预计算映射将经由站序映射到图内 track 序列，再进行时间比例线性插值。跨线接续站对（同站不同线、距离为 0）自动跳过。隐藏 path 参与匹配，但列车在隐藏 track 上不可见（逐 track 判定）、在可见 track 上正常显示。多经由拼接匹配覆盖跨线车次。**时间归一化**使用单调递增算法（while-loop +1440），自动处理多日行程（如 K316/K317 重庆西→喀什 52h）。长途车次在 24h 模拟周期内可出现 2-3 个实例。
 
 ## 六、数据架构
 
@@ -161,6 +162,7 @@ rg.db 维护：`meta.kl_version` ↔ `kl.db.meta.version`
 | `tools/migrate_json_to_db.py` | JSON→DB 迁移（已执行） |
 | `simulation.py` | 模拟引擎：RouteTrackIndex + TrainPositioner + SimulationClock + TrainRenderer；多日时间归一化 + 多实例定位 |
 | `sim_controls.py` | 模拟控制面板 |
+| `station_status.py` | 车站状态面板：下拉框选站 + 6种形状站内列车列表 |
 | `canvas.py` | 画布：Pass 1(线路) + Pass 2(站名) + Pass 3(列车) |
 | `models.py` | 数据模型：TrainGraph（已移除 length/width，scale 运行时可变不持久化）、RailwayPath、RailwayTrack |
 | `train_match_dialogs.py` | 车次详情/匹配路由对话框（停站表含当前车次列、RNone 修复） |

@@ -1,6 +1,6 @@
 # Running Train
 
-基于 PySide6 的铁路运行图编辑工具，集成经由-车次匹配引擎。支持多图切换。
+基于 PySide6 的铁路运行动态模拟工具，支持多图切换。
 
 ## 当前状态
 
@@ -126,6 +126,7 @@ running_train/
 ├── config.py                # 配置管理（图切换 + DB路径 + setup 读写）
 ├── simulation.py            # 模拟引擎（RouteTrackIndex + TrainPositioner + Clock + Renderer）
 ├── sim_controls.py          # 模拟控制面板（启停合一 + 步进 + 速度）
+├── station_status.py        # 车站状态面板（站内列车实时列表 + 类型形状）
 ├── route_editor.py          # 经由编辑对话框
 ├── route_finder.py          # BFS 路径搜索
 ├── train_match_dialogs.py   # 匹配查看对话框（3 类）
@@ -163,6 +164,7 @@ running_train/
 | 上下行 | 每 track 可独立设置上下行罗盘方向（N/E/S/W 四向，默认上行 N / 下行 S） |
 | 车次号 | 标签相对圆点的方向由 track 的罗盘方向决定；圆点垂直轨道偏移（上行 +10px，下行 -10px） |
 | 控制面板 | 左侧 100px，24 整点按钮 + 时钟 + 步进按钮（⏪10 / ◀1 / 1▶ / 10⏩）+ 开始/暂停 + 速度 |
+| 车站状态 | 控制面板下方，下拉框选站（按经停车次排序）+ 站内列车列表（始发/终到/经停，6 种方向形状） |
 | 定位算法 | 车次 → train_route_matches → RouteTrackIndex.get_tracks_between() → track 序列 + 线性插值 |
 
 ### 定位覆盖率
@@ -185,6 +187,12 @@ python main.py
 ```
 
 ## 最近更新
+
+### 2026-07-05
+- **车站状态面板**：控制面板下方新增车站状态区域，下拉框按经停车次排序选站，实时显示始发/终到/经停列车，6 种方向类型形状（外凸三角/内凹三角/平直）
+- **隐藏 path 逐 track 判定**：列车在隐藏 track 上不可见、在可见 track 上正常显示，替代原先全段隐藏逻辑
+- **多经由拼接匹配**：`_expand_multi_route` 回退从 route_stations 找接续站，`_get_stop_pair_tracks` 在接续站拼接 track 序列
+- **川渝图**：补 20 条联络线 + 重庆东环线为隐藏 path
 
 ### 2026-07-04
 - **客里表修订 10→15 项**：川青线（棉竹南→绵竹南）、达万线（开江→开江南）站名修正；成灌线（安靖↔成都西）、成都西环线（补入草金所）、宁蓉线（补入童家溪所）、西成客专线（德阳里程修订）、白覃联络线（12→11km）

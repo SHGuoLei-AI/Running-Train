@@ -18,6 +18,7 @@ from canvas import DrawingCanvas
 from delegates import RadioDelegate
 from simulation import TrainPositioner, SimulationClock
 from sim_controls import SimulationControlPanel
+from station_status import StationStatusWidget
 import config
 
 locale.setlocale(locale.LC_COLLATE, 'chs')  # pinyin sort for Chinese
@@ -230,10 +231,19 @@ class MainWindow(QMainWindow):
         while canvas_layout.count():
             canvas_layout.takeAt(0)
 
-        # 模拟控制面板（左侧，100px 宽，启动即显示）
-        self._sim_panel = SimulationControlPanel()
-        canvas_layout.addWidget(self._sim_panel)
+        # 左侧面板：控制面板 + 车站状态（垂直排列）
+        left_side = QVBoxLayout()
+        left_side.setContentsMargins(0, 0, 0, 0)
+        left_side.setSpacing(2)
 
+        self._sim_panel = SimulationControlPanel()
+        left_side.addWidget(self._sim_panel)
+
+        self._station_status = StationStatusWidget(
+            config.get_rt_path(), self._db, self.train_graph)
+        left_side.addWidget(self._station_status, stretch=1)
+
+        canvas_layout.addLayout(left_side)
         canvas_layout.addWidget(self._splitter, stretch=1)
 
         # 模拟时钟
@@ -1530,6 +1540,11 @@ class MainWindow(QMainWindow):
             rt_conn.close()
         except Exception:
             pass
+        # 刷新车站状态数据（更新引用以支持换图）
+        if hasattr(self, '_station_status') and self._station_status:
+            self._station_status._rt_db_path = rt_path
+            self._station_status._train_graph = self.train_graph
+            self._station_status.reload_data()
         # 立即用当前时钟时间刷新列车位置
         self._on_sim_tick(self._sim_clock.current_minute)
 
@@ -1540,6 +1555,8 @@ class MainWindow(QMainWindow):
             self.canvas.set_train_positions(positions)
         if self._sim_panel:
             self._sim_panel.update_clock(minute)
+        if hasattr(self, '_station_status') and self._station_status:
+            self._station_status.update_time(minute)
 
     def closeEvent(self, event):
         if hasattr(self, '_db') and self._db:

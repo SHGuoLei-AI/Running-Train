@@ -510,11 +510,13 @@ class TrainPositioner:
     # ── 停站定位 ────────────────────────────────────────
 
     def _on_hidden_path(self, tracks: list[TrackInfo]) -> bool:
-        """检查 track 序列中是否有隐藏 path 的 track。"""
+        """检查 track 序列是否全部在隐藏 path 上（全部隐藏才跳过）。"""
+        if not tracks:
+            return False
         for t in tracks:
-            if t.path_code in self._route_index.hidden_path_ids:
-                return True
-        return False
+            if t.path_code not in self._route_index.hidden_path_ids:
+                return False  # 至少有一条可见 track → 不跳过
+        return True  # 全部隐藏
 
     def _at_station(self, stops: list[TrainStop], i: int, train_name: str) -> Optional[TrainPosition]:
         """列车停在 stops[i]，在对应图内 track 的站端坐标。"""
@@ -526,13 +528,12 @@ class TrainPositioner:
         if seg is None:
             return None
 
-        route_id = seg['route_id']
         is_seg_end = (i == seg['end_seq'])
 
         if i >= len(stops) - 1 or is_seg_end:
             # 终到站 或 匹配段末站：取上一段的末端 track
-            tracks = self._get_stop_pair_tracks(stops, i - 1, train_name, route_id)
-            if not tracks or self._on_hidden_path(tracks):
+            tracks = self._get_stop_pair_tracks(stops, i - 1, train_name, seg)
+            if not tracks:
                 return None
             last_track = tracks[-1]
             if stops[i].station_name == last_track.tail_station:
@@ -550,8 +551,8 @@ class TrainPositioner:
                                  direction=direction, train_name=train_name)
 
         # 一般停站：取下一段的起始 track
-        tracks = self._get_stop_pair_tracks(stops, i, train_name, route_id)
-        if not tracks or self._on_hidden_path(tracks):
+        tracks = self._get_stop_pair_tracks(stops, i, train_name, seg)
+        if not tracks:
             return None
 
         first_track = tracks[0]
@@ -583,9 +584,8 @@ class TrainPositioner:
         if seg is None:
             return None
 
-        route_id = seg['route_id']
-        tracks = self._get_stop_pair_tracks(stops, i, train_name, route_id)
-        if not tracks or self._on_hidden_path(tracks):
+        tracks = self._get_stop_pair_tracks(stops, i, train_name, seg)
+        if not tracks:
             return None
 
         label = stops[i].segment_train_no or train_name
@@ -597,6 +597,7 @@ class TrainPositioner:
         # 沿 track 序列逐段定位
         entry_stn = stops[i].station_name
         acc = 0.0
+        hidden_ids = self._route_index.hidden_path_ids
         for ti, track in enumerate(tracks):
             # 复车次换号检测：跨 path 且下一站车次号不同时切换
             if ti > 0 and track.path_code != tracks[ti - 1].path_code:
@@ -613,6 +614,10 @@ class TrainPositioner:
             p_sign = _perpendicular_sign(train_is_down)
 
             if traveled <= acc + tk_len or is_last:
+                # 当前 track 属于隐藏 path → 列车不可见
+                if track.path_code in hidden_ids:
+                    return None
+
                 local = traveled - acc
                 ratio = local / tk_len if tk_len > 0 else 0.0
                 if not is_forward:
@@ -633,6 +638,8 @@ class TrainPositioner:
 
         # fallback
         last_track = tracks[-1]
+        if last_track.path_code in hidden_ids:
+            return None
         is_forward = (entry_stn == last_track.tail_station)
         train_is_down = _train_is_down_on_track(last_track, is_forward)
         p_sign = _perpendicular_sign(train_is_down)
@@ -658,11 +665,32 @@ class TrainPositioner:
         return None
 
     def _get_stop_pair_tracks(self, stops: list[TrainStop], i: int,
-                              train_name: str, route_id: int
+                              train_name: str, seg: dict
                               ) -> Optional[list[TrackInfo]]:
-        """获取两停站之间的全部 track 序列（含中间非停站的经由站）。"""
+        """获取两停站之间的全部 track 序列（含中间非停站的经由站）。
+
+        支持多经由拼接：seg 可含 route_ids 列表 + junction_station，
+        当单条经由无法覆盖整个停站对时，尝试在接续站处拼接两条经由的 track。
+        """
         a = stops[i].station_name
         b = stops[i + 1].station_name
+        route_id = seg.get('route_id', 0)
+
+        if 'route_ids' in seg and route_id == 0:
+            # 多经由拼接匹配：先试分别查，再试接续站拼接
+            rids = seg['route_ids']
+            junction = seg.get('junction_station', '')
+            for rid in rids:
+                tracks = self._route_index.get_tracks_between(rid, a, b)
+                if tracks:
+                    return tracks
+            if junction:
+                tracks_a = self._route_index.get_tracks_between(rids[0], a, junction)
+                tracks_b = self._route_index.get_tracks_between(rids[1], junction, b)
+                if tracks_a and tracks_b:
+                    return tracks_a + tracks_b
+            return None
+
         return self._route_index.get_tracks_between(route_id, a, b)
 
     def _expand_multi_route(self, train_name: str, start_seq: int, end_seq: int,
@@ -696,6 +724,12 @@ class TrainPositioner:
                 break
 
         if jn_seq is None or jn_seq == start_seq or jn_seq == end_seq:
+            # 回退：从途经站中找接续站（即使车次不在此停站）
+            common = sorted(names_a & names_b)
+            if common:
+                return [{'start_seq': start_seq, 'end_seq': end_seq,
+                         'route_id': 0, 'route_ids': [rid_a, rid_b],
+                         'junction_station': common[0]}]
             return [{'start_seq': start_seq, 'end_seq': end_seq, 'route_id': 0}]
 
         result = []
