@@ -4,18 +4,17 @@
 
 ## 当前状态
 
-| 指标 | 新疆 | 上海 | 川渝 |
-|------|------|------|------|
-| 图内线路 | 33 path | 39 path | 39 path |
-| 图内区段 | 250 | 222 | 455 |
-| 图内站 | 238 | 161 | 431 |
-| 经由总数 | 26 | 51 | 47 |
-| 图内车次 | 618 | 2,528 | 1,853 |
-| 匹配段数 | 839 | 4,880 | 2,918 |
+| 指标 | 新疆 | 上海 | 川渝 | 陕甘宁 |
+|------|------|------|------|--------|
+| 图内线路 | 33 path | 39 path | 39 path | 30 path |
+| 图内区段 | 250 | 222 | 455 | 446 |
+| 图内站 | 238 | 161 | 431 | 410 |
+| 经由总数 | 26 | 51 | 47 | 9 |
+| 图内车次 | 618 | 2,528 | 1,853 | 61 |
 
-| 客里表线路 | 756 条，6654 站 |
+| 客里表线路 | 765 条，6726 站 |
 | 时刻表车次 | 17,168 趟，150,841 停站 |
-| 客里表修订 | 15 项（[kl_revisions.md](data/kl_revisions.md)） |
+| 客里表修订 | 16 项（[kl_revisions.md](data/kl_revisions.md)） |
 
 ## 数据架构
 
@@ -29,6 +28,8 @@ data/
 ├── rt-shanghai.db    # 图上车次 — 上海区域
 ├── rg-chuanyu.db     # 几何结构 — 川渝区域
 ├── rt-chuanyu.db     # 图上车次 — 川渝区域
+├── rg-shangannin.db  # 几何结构 — 陕甘宁-蒙西区域
+├── rt-shangannin.db  # 图上车次 — 陕甘宁-蒙西区域
 ├── kl_revisions.md   # 客里表修订记录
 ├── graphs.json       # 图配置文件（仅 id + 路径）
 ├── setup.json        # 全局设置（auto_backup 等）
@@ -49,10 +50,11 @@ graphs.json:
     "graphs": [
         {"id": "xinjiang", "rg_db": "data/rg-xinjiang.db", "rt_db": "data/rt-xinjiang.db"},
         {"id": "shanghai", "rg_db": "data/rg-shanghai.db", "rt_db": "data/rt-shanghai.db"},
-        {"id": "chuanyu",  "rg_db": "data/rg-chuanyu.db",  "rt_db": "data/rt-chuanyu.db"}
+        {"id": "chuanyu",    "rg_db": "data/rg-chuanyu.db",    "rt_db": "data/rt-chuanyu.db"},
+        {"id": "shangannin","rg_db": "data/rg-shangannin.db","rt_db": "data/rt-shangannin.db"}
     ],
-    "active": "chuanyu",
-    "recent": ["chuanyu", "xinjiang", "shanghai"]
+    "active": "shangannin",
+    "recent": ["shangannin", "chuanyu", "xinjiang", "shanghai"]
 }
 ```
 
@@ -110,8 +112,11 @@ graphs.json:
 
 ### 主窗口
 - 线路图绘制：区间渲染（黑中线 + 红上行 + 绿下行）+ 站名标注
+- 选中高亮：path 表选中或画布单击 → 红色加粗高亮对应线路
 - 数据面板：线路表（9列）、区间表（6列），表格编辑实时反映
 - 画布缩放：+/-/# 按钮
+- 拼音跳转：线路选择列表上方 ABCDE/FGH/.../YZ 按钮快速定位
+- 头部/尾部延伸：从客里表选站延伸区间，自动计算里程
 - 导出/导入 JSON：含 routes + route_stations
 
 ## 项目结构

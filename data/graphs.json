@@ -14,12 +14,18 @@
             "id": "chuanyu",
             "rg_db": "data/rg-chuanyu.db",
             "rt_db": "data/rt-chuanyu.db"
+        },
+        {
+            "id": "shangannin",
+            "rg_db": "data/rg-shangannin.db",
+            "rt_db": "data/rt-shangannin.db"
         }
     ],
-    "active": "shanghai",
+    "active": "shangannin",
     "recent": [
-        "shanghai",
+        "shangannin",
+        "chuanyu",
         "xinjiang",
-        "chuanyu"
+        "shanghai"
     ]
 }

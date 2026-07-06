@@ -16,13 +16,20 @@ class DrawingCanvas(QWidget):
     NEARBY_THRESHOLD = 15  # 像素，判定"靠近"端点/列车的距离
 
     mouse_status = Signal(str)  # 格式化状态文本（末尾可含 |||train_name|||）
+    path_clicked = Signal(int)  # 单击选中线路，传 path 索引
 
     def __init__(self, train_graph, parent=None):
         super().__init__(parent)
         self.train_graph = train_graph
         self._train_positions: list = []  # list of TrainPosition
+        self.selected_path_index = -1  # 选中的 path 索引，-1 表示无选中
         self.setMouseTracking(True)
         self._update_size()
+
+    def set_selected_path(self, index: int):
+        """设置选中的 path 索引，-1 清除选中。触发重绘。"""
+        self.selected_path_index = index
+        self.update()
 
     def set_train_positions(self, positions: list):
         """设置要绘制的列车位置列表，触发重绘"""
@@ -53,6 +60,36 @@ class DrawingCanvas(QWidget):
 
         self.mouse_status.emit(status)
         super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event):
+        """单击画布：找最近的 track 所属 path，发射选中信号。"""
+        scale = self.train_graph.scale
+        px = event.position().x()
+        py = event.position().y()
+
+        best_path = -1
+        best_dist = float('inf')
+
+        for path_idx, path in enumerate(self.train_graph.train_paths):
+            if path.hidden:
+                continue
+            for track in path.tracks:
+                sx, sy = track.start_point
+                x1 = sx * scale
+                y1 = sy * scale
+                ex, ey = track.end_point()
+                x2 = ex * scale
+                y2 = ey * scale
+                dist = self._point_to_segment_distance(px, py, x1, y1, x2, y2)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_path = path_idx
+
+        if best_path >= 0 and best_dist < self.NEARBY_THRESHOLD * 2:
+            self.path_clicked.emit(best_path)
+        else:
+            self.path_clicked.emit(-1)
+        super().mousePressEvent(event)
 
     @staticmethod
     def _point_to_segment_distance(px: float, py: float,
@@ -96,7 +133,7 @@ class DrawingCanvas(QWidget):
         nearby: list[tuple[str, float, float]] = []
         seen: set[str] = set()
 
-        for track in self.train_graph.get_all_tracks():
+        for track, _ in self.train_graph.get_all_tracks():
             sx, sy = track.start_point
             hx = sx * scale
             hy = sy * scale
@@ -132,7 +169,7 @@ class DrawingCanvas(QWidget):
     def _update_size(self):
         scale = self.train_graph.scale
         max_x = max_y = 0
-        for track in self.train_graph.get_all_tracks():
+        for track, _ in self.train_graph.get_all_tracks():
             x1 = track.start_point[0] * scale
             y1 = track.start_point[1] * scale
             ex, ey = track.end_point()
@@ -148,9 +185,10 @@ class DrawingCanvas(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         scale = self.train_graph.scale
         tracks = self.train_graph.get_all_tracks()
+        sel_idx = self.selected_path_index
 
         # 第1遍：画所有线段（中线、上/下行线、车站标记线）
-        for track in tracks:
+        for track, path_idx in tracks:
             painter.save()
             x = track.start_point[0] * scale
             y = track.start_point[1] * scale
@@ -158,14 +196,23 @@ class DrawingCanvas(QWidget):
             painter.translate(x, y)
             painter.rotate(track.actual_angle)
 
-            painter.setPen(QPen(Qt.GlobalColor.black, 1))
-            painter.drawLine(0, 0, int(length), 0)
-
-            painter.setPen(QPen(UP_LINE_COLOR, 1))
-            painter.drawLine(0, TRACK_WIDTH, int(length), TRACK_WIDTH)
-
-            painter.setPen(QPen(DOWN_LINE_COLOR, 1))
-            painter.drawLine(0, -TRACK_WIDTH, int(length), -TRACK_WIDTH)
+            is_selected = (path_idx == sel_idx)
+            if is_selected:
+                # 选中 path：红色加粗中线
+                painter.setPen(QPen(QColor(220, 30, 30), 3))
+                painter.drawLine(0, 0, int(length), 0)
+                # 上/下行线也加粗
+                painter.setPen(QPen(UP_LINE_COLOR, 2))
+                painter.drawLine(0, TRACK_WIDTH, int(length), TRACK_WIDTH)
+                painter.setPen(QPen(DOWN_LINE_COLOR, 2))
+                painter.drawLine(0, -TRACK_WIDTH, int(length), -TRACK_WIDTH)
+            else:
+                painter.setPen(QPen(Qt.GlobalColor.black, 1))
+                painter.drawLine(0, 0, int(length), 0)
+                painter.setPen(QPen(UP_LINE_COLOR, 1))
+                painter.drawLine(0, TRACK_WIDTH, int(length), TRACK_WIDTH)
+                painter.setPen(QPen(DOWN_LINE_COLOR, 1))
+                painter.drawLine(0, -TRACK_WIDTH, int(length), -TRACK_WIDTH)
 
             painter.setPen(QPen(QColor(200, 200, 200), 1))
             painter.drawLine(0, -TRACK_WIDTH, 0, TRACK_WIDTH)
@@ -179,7 +226,7 @@ class DrawingCanvas(QWidget):
         painter.setFont(font)
         painter.setPen(QPen(Qt.GlobalColor.black, 1))
 
-        for track in tracks:
+        for track, _ in tracks:
             length = track.length * scale
             x = track.start_point[0] * scale
             y = track.start_point[1] * scale

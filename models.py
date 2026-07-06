@@ -16,10 +16,12 @@ class TrainGraph:
         self.train_paths.append(path)
 
     def get_all_tracks(self):
+        """返回 (track, path_idx) 列表。hidden 的 path 不包含在内。"""
         tracks = []
-        for path in self.train_paths:
+        for idx, path in enumerate(self.train_paths):
             if not path.hidden:
-                tracks.extend(path.tracks)
+                for track in path.tracks:
+                    tracks.append((track, idx))
         return tracks
 
 

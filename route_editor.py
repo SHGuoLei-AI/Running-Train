@@ -3,6 +3,7 @@ import os
 import sqlite3
 import locale
 locale.setlocale(locale.LC_COLLATE, 'chs')  # pinyin sort for Chinese
+from pypinyin import pinyin, Style as PinyinStyle
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QSplitter, QTableWidget,
     QTableWidgetItem, QPushButton, QLabel, QMessageBox, QDialogButtonBox,
@@ -13,6 +14,42 @@ from PySide6.QtGui import QColor
 import config
 
 KL_PATH = os.path.join(os.path.dirname(__file__), 'data', 'kl.db')
+
+
+def _jump_to_letter(line_list, target_letter):
+    """Scroll line_list to the first item whose pinyin first letter matches target_letter."""
+    for i in range(line_list.count()):
+        item = line_list.item(i)
+        py = pinyin(item.text(), style=PinyinStyle.FIRST_LETTER, heteronym=False)
+        first = py[0][0].upper() if py else ''
+        if first == target_letter:
+            line_list.scrollToItem(item, QAbstractItemView.ScrollHint.PositionAtTop)
+            line_list.setCurrentItem(item)
+            return
+
+
+def create_line_jump_buttons(line_list):
+    """Create a row of pinyin-index buttons that jump to first line starting with each letter group."""
+    widget = QWidget()
+    row = QHBoxLayout(widget)
+    row.setContentsMargins(0, 0, 0, 2)
+    row.setSpacing(2)
+
+    groups = [
+        ("ABCDE", "A"), ("FGH", "F"), ("JK", "J"), ("LMN", "L"),
+        ("PQR", "P"), ("ST", "S"), ("WX", "W"), ("YZ", "Y"),
+    ]
+
+    for label, target in groups:
+        btn = QPushButton(label)
+        btn.setFixedWidth(52)
+        btn.setMaximumHeight(22)
+        btn.setStyleSheet("font-size: 10px; padding: 1px 3px;")
+        btn.clicked.connect(lambda checked, t=target, ll=line_list: _jump_to_letter(ll, t))
+        row.addWidget(btn)
+
+    row.addStretch()
+    return widget
 
 
 def _get_rg_path():
@@ -373,26 +410,46 @@ class RouteEditorDialog(QDialog):
     # ── Add new route ────────────────────────────────────
 
     def _on_add_route(self):
-        """Create a new route by picking a starting line and station from kl."""
-        result = self._pick_kl_start_station()
+        """Create a new route by picking a kl line segment (start→end)."""
+        result = self._pick_kl_route_segment()
         if result is None:
             return
 
-        line_name, station_name = result
+        line_name, start_stn, end_stn = result
+
+        # Query all stations on this line in order
+        all_sts = self._kl.execute(
+            "SELECT station_name, dist_from_start FROM line_stations "
+            "WHERE line_name=? ORDER BY dist_from_start",
+            (line_name,)
+        ).fetchall()
+
+        # Find indices of start and end stations
+        names = [s[0] for s in all_sts]
+        try:
+            si = names.index(start_stn)
+            ei = names.index(end_stn)
+        except ValueError:
+            return
+
+        if si > ei:
+            si, ei = ei, si  # swap so start <= end
+
+        segment = all_sts[si:ei + 1]
 
         # Create route
+        route_name = f"{line_name}({start_stn}→{end_stn})"
         self._db.execute(
             'INSERT INTO routes (name, start_station, end_station, total_distance, junction_count) '
             'VALUES (?, ?, ?, 0, 0)',
-            (f"新经由({station_name})", station_name, station_name)
+            (route_name, start_stn, end_stn)
         )
         rid = self._db.execute('SELECT last_insert_rowid()').fetchone()[0]
-        self._db.execute(
-            'INSERT INTO route_stations (route_id, seq, station_name, line_name, cum_distance, is_junction) '
-            'VALUES (?, 1, ?, ?, 0, 0)',
-            (rid, station_name, line_name)
-        )
-        self._db.commit()
+
+        # Build station list for _recalc_distances
+        raw = [(sn, line_name, dist, 0) for sn, dist in segment]
+        recalc = self._recalc_distances(raw)
+        self._save_stations(rid, recalc)
         self._load_routes()
 
         # Select the new route
@@ -403,8 +460,9 @@ class RouteEditorDialog(QDialog):
         self._show_stations(rid)
         self._update_button_state()
 
-    def _pick_kl_start_station(self):
-        """Dialog: pick a kl line, then a station on that line. Returns (line_name, station_name) or None."""
+    def _pick_kl_route_segment(self):
+        """Dialog: pick a kl line, then start & end stations on that line.
+        Returns (line_name, start_station, end_station) or None."""
         # Load all lines, sort by pinyin
         lines = self._kl.execute(
             "SELECT DISTINCT line_name FROM line_stations"
@@ -412,8 +470,8 @@ class RouteEditorDialog(QDialog):
         lines = sorted(lines, key=lambda x: locale.strxfrm(x[0]))
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("新增经由 — 选择起点站")
-        dlg.resize(500, 420)
+        dlg.setWindowTitle("新增经由 — 选择起讫站")
+        dlg.resize(520, 520)
         layout = QVBoxLayout(dlg)
 
         layout.addWidget(QLabel("选择线路:"))
@@ -421,26 +479,68 @@ class RouteEditorDialog(QDialog):
         line_list = QListWidget()
         for (ln,) in lines:
             QListWidgetItem(ln, line_list)
+        layout.addWidget(create_line_jump_buttons(line_list))
         layout.addWidget(line_list)
 
-        layout.addWidget(QLabel("选择起点站:"))
-
-        station_list = QListWidget()
-        layout.addWidget(station_list)
+        # Shared state
+        state = {'all_sts': [], '_updating': False}
 
         def update_stations():
-            station_list.clear()
+            """Refresh both station lists when line changes."""
+            state['all_sts'] = []
+            start_list.clear()
+            end_list.clear()
+
             if line_list.currentItem() is None:
                 return
             ln = line_list.currentItem().text()
             sts = self._kl.execute(
-                "SELECT station_name, dist_from_start FROM line_stations WHERE line_name=? ORDER BY dist_from_start",
+                "SELECT station_name, dist_from_start FROM line_stations "
+                "WHERE line_name=? ORDER BY dist_from_start",
                 (ln,)
             ).fetchall()
+            state['all_sts'] = sts
             for sn, d in sts:
-                QListWidgetItem(f"{sn}  ({d:.0f}km)", station_list)
+                item_text = f"{sn}  ({d:.0f}km)"
+                QListWidgetItem(item_text, start_list)
+                QListWidgetItem(item_text, end_list)
 
-        line_list.currentItemChanged.connect(lambda: update_stations())
+        def on_end_changed(current, previous):
+            """Preview distance between start and end stations."""
+            if state['_updating']:
+                return
+            si = start_list.currentRow()
+            ei = end_list.currentRow()
+            sts = state['all_sts']
+            if si >= 0 and ei >= 0 and si < len(sts) and ei < len(sts):
+                dist = abs(sts[ei][1] - sts[si][1])
+                preview_label.setText(
+                    f"经由: {sts[si][0]} → {sts[ei][0]}，里程 {dist:.0f}km"
+                )
+            else:
+                preview_label.setText("")
+
+        def on_start_changed(current, previous):
+            on_end_changed(current, previous)
+
+        line_list.currentItemChanged.connect(lambda cur, prev: update_stations())
+
+        layout.addWidget(QLabel("选择起点站:"))
+
+        start_list = QListWidget()
+        layout.addWidget(start_list)
+        start_list.currentItemChanged.connect(on_start_changed)
+
+        layout.addWidget(QLabel("选择终点站:"))
+
+        end_list = QListWidget()
+        layout.addWidget(end_list)
+        end_list.currentItemChanged.connect(on_end_changed)
+
+        preview_label = QLabel("")
+        preview_label.setStyleSheet("color: #0066cc; font-weight: bold;")
+        layout.addWidget(preview_label)
+
         if line_list.count() > 0:
             line_list.setCurrentRow(0)
             update_stations()
@@ -452,15 +552,18 @@ class RouteEditorDialog(QDialog):
 
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return None
-        if line_list.currentItem() is None or station_list.currentItem() is None:
+        if (line_list.currentItem() is None or
+                start_list.currentItem() is None or
+                end_list.currentItem() is None):
             return None
 
         ln = line_list.currentItem().text()
-        sn_text = station_list.currentItem().text()
-        # Extract station name from "站名  (XXkm)"
-        sn = sn_text.split("  (")[0]
+        start_text = start_list.currentItem().text()
+        end_text = end_list.currentItem().text()
+        start_sn = start_text.split("  (")[0]
+        end_sn = end_text.split("  (")[0]
 
-        return (ln, sn)
+        return (ln, start_sn, end_sn)
 
     # ── Delete head section ──────────────────────────────
 
