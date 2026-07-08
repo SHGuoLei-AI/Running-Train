@@ -432,10 +432,10 @@ class RouteEditorDialog(QDialog):
         except ValueError:
             return
 
-        if si > ei:
-            si, ei = ei, si  # swap so start <= end
-
-        segment = all_sts[si:ei + 1]
+        if si <= ei:
+            segment = all_sts[si:ei + 1]
+        else:
+            segment = list(reversed(all_sts[ei:si + 1]))
 
         # Create route
         route_name = f"{line_name}({start_stn}→{end_stn})"
